@@ -1,41 +1,110 @@
 package main
 
-import "core:time"
 import "core:fmt"
 import ma "vendor:miniaudio"
-import rl "vendor:raylib"
+import app_framework "app_framework"
+import vg "vendor:nanovg"
+import clay "app_framework/clay-odin"
+
 
 perc : ma.sound
-dummy : ma.sound
-userData :: struct {
-    engine: ^ma.engine,
-}
-
 
 main :: proc() {
     using fmt
     ae := createEngine(auto_start = true)
-    metNode : ^MetronomeNode = createMet(&ae.engine, 120.0)
-    ae->attachNode(cast(^ma.node)(metNode))
+    ae->init()
+    ph := createPlayhead(ae)
+    defer free(ph)
+    levels := createLevelsNode(ae)
+    defer free(levels)
+    wt := createWaveTables(48000, .Square, 220.0)
 
+    wproc := createProcessNode(ae)
+    defer free(wproc)
+    wproc.user_data = &wt
 
-    // Raylib window setup
-    rl.InitWindow(800, 600, "Metronome Test")
-    rl.SetTargetFPS(60)
-    tempo :f32 = auto_cast metNode.tempo
-    for !rl.WindowShouldClose() {
-        rl.BeginDrawing()
-        rl.ClearBackground(rl.RAYWHITE)
-        rl.GuiButton(rl.Rectangle{x = 100, y = 100, width = 200, height = 50}, "Hello")
-
-        res := rl.GuiSlider(rl.Rectangle{x = 100, y = 200, width = 200, height = 20}, "Tempo", fmt.ctprintf("%.2f", tempo), &tempo , 30.0, 300.0)
-        metNode->setTempo(f64(tempo))
-        fmt.printfln("Slider result: %d, Tempo: %.2f", res, tempo)
-
-        rl.EndDrawing()
+    wproc.processFunction = proc (pNode: ^ma.node, ppFramesIn: ^[^]f32, pFrameCountIn: ^u32, ppFramesOut: ^[^]f32, pFrameCountOut: ^u32, user_data: rawptr) {
+        // Example processing function that applies a simple gain to the input audio
+        // wt := cast(^WaveTables)user_data
+        // for fr in 0..<pFrameCountOut^ {
+        //     samp := wt->readAdvance()
+        //     for ch in 0..<2 {
+        //         ppFramesOut[fr * 2 + u32(ch)] = samp * 0.2 // Apply gain
+        //     }
+            
+        // }
     }
 
-    rl.CloseWindow()
-    ae->uninit()
+    perc_wave, err := loadWaveFile("perc.wav", 48000); 
+    if err != .None {
+        fmt.printf("Failed to load wave file: %s\n", err)
+        return
+    }
+
+
+    ae->attachNode(cast(^ma.node)ph)
+    ma.sound_init_from_file(&ae.engine, "perc.wav", {.DECODE}, nil, nil, &perc)
+    ma.node_attach_output_bus(cast(^ma.node)&perc, 0, cast(^ma.node)levels, 0)
+    ae->attachNode(cast(^ma.node)levels)
+    ae->attachNode(cast(^ma.node)wproc)
+
+
+    signalConnect(ph.onTick, proc(value: any, data: rawptr) {
+        ph := cast(^PlayheadNode)data
+        if ph->isBeat() {
+            ma.sound_stop(&perc)
+            ma.sound_seek_to_pcm_frame(&perc, 0)
+            ma.sound_start(&perc)
+        }
+     }, cast(rawptr)ph      
+    ) 
+
+    ph->setTempo(120.0)
+
+    // ui
+
+    ui := app_framework.createUI(vg.Color{0, 0, 0, 255})
+    main_page := app_framework.createPage("main")
+    button_el := app_framework.createElement("button")
+    button_el.onDraw = proc(el: ^app_framework.Element, ctx: ^vg.Context, user_data: rawptr) {
+        vg.BeginPath(ctx)
+        vg.Rect(ctx, el.bounds.x, el.bounds.y, el.bounds.width, el.bounds.height)
+        vg.FillColor(ctx, vg.RGBA(0, 128, 255, 255))
+        vg.Fill(ctx)
+    }
+    main_page.addChild(main_page, button_el)
+    main_page.createLayout = proc(page: ^app_framework.Page) -> clay.ClayArray(clay.RenderCommand) {
+        using clay
+        BeginLayout()
+        if UI()({
+            layout = {
+                layoutDirection = LayoutDirection.TopToBottom,
+                childAlignment = {x= LayoutAlignmentX.Left, y = LayoutAlignmentY.Top},
+                sizing = {width = SizingGrow(), height = SizingGrow()},
+                padding = PaddingAll(5),
+            }
+        }) {
+            if UI()({
+                layout = {
+                    layoutDirection = LayoutDirection.LeftToRight,
+                    childAlignment = {x= LayoutAlignmentX.Left, y = LayoutAlignmentY.Top},
+                    sizing = {width = SizingFixed(800), height = SizingFixed(50)},
+                    padding = PaddingAll(5),
+                },
+                custom = { customData = page.elements["button"] },
+            }) {}
+        }
+        return EndLayout()
+    }
+    ui.addPage(ui, main_page)
+    fmt.printfln("Starting application ui")
+    ui.router->push("main")
+
+    app := app_framework.App_Create("Odin Audio Engine", 1080, 288, 60.0)
+    app_framework.App_Init(app)
+
+    app.ui = ui
+    app.run(app)
+    app_framework.App_Uninit(app)
 
 }

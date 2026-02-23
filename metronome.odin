@@ -4,10 +4,6 @@ import ma "vendor:miniaudio"
 import "base:runtime"
 import "core:fmt"
 
-// TODO: Test out tempo change. Afraid of samplecounter logic being incorrect when tempo changes mid-tick. Maybe need to calculate the sample counter offset based on the new tempo and the number of samples already processed in the current tick?
-
-MAX_TEMPO :: 300.0
-MIN_TEMPO :: 20.0
 
 MetronomeNodeVTable : ma.node_vtable = {
     onProcess = metronomeNodeProcess,
@@ -15,8 +11,7 @@ MetronomeNodeVTable : ma.node_vtable = {
     inputBusCount = 1,
     flags = {.PASSTHROUGH, .CONTINUOUS_PROCESSING},
 }
-inputChannels := [2]u32{2,2}
-outputChannels := [2]u32{2,2}
+
 
 MetronomeNodeConfig : ma.node_config = {
     vtable = &MetronomeNodeVTable,
@@ -28,10 +23,6 @@ MetronomeNodeConfig : ma.node_config = {
 
 }
 
-TimeSignature :: struct {
-    numerator: u32,
-    denominator: u32,
-}
 
 MetronomeNode :: struct {
     using base: ma.node_base,
@@ -80,6 +71,8 @@ setTempo :: proc(m: ^MetronomeNode, newTempo: f64) {
     m.tempo = clamp(newTempo, MIN_TEMPO, MAX_TEMPO)
     m->calculateSamplesPerTick()
 }
+
+
 createMet :: proc(engine: ^ma.engine, tempo: f64 = 120.0, time_signature: TimeSignature = TimeSignature{numerator = 4, denominator = 4}) -> ^MetronomeNode {
 
     m := new(MetronomeNode)

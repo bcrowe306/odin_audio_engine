@@ -1,7 +1,6 @@
 package main
 
 import "base:runtime"
-import "core:time"
 import "core:fmt"
 import ma "vendor:miniaudio"
 
@@ -9,6 +8,9 @@ DEFAULT_SAMPLE_RATE :: 48000
 DEFAULT_CHANNELS :: 2
 DEFAULT_FORMAT :: ma.format.f32
 DEFAULT_BUFFER_SIZE :: 256
+
+inputChannels := [2]u32{2,2}
+outputChannels := [2]u32{2,2}
 
 EngineContext :: struct {
     engine: ^AudioEngine,
@@ -40,7 +42,7 @@ AudioEngine :: struct {
     start: proc(ae: ^AudioEngine),
     stop: proc(ae: ^AudioEngine),
     getOutputBus: proc(ae: ^AudioEngine) -> ^ma.node,
-    attachNode: proc(ae: ^AudioEngine, node: ^ma.node),
+    attachNode: proc(ae: ^AudioEngine, node: ^ma.node) -> ma.result,
     getNodeGraph: proc(ae: ^AudioEngine) -> ^ma.node_graph,
 
 }
@@ -48,7 +50,6 @@ AudioEngine :: struct {
 createEngine :: proc(sample_rate: u32 = 48000, channels: u32 = 2, format: ma.format = ma.format.f32, buffer_size: u32 = 256, auto_start: bool = true) -> ^AudioEngine {
     ae := new(AudioEngine)
     using fmt
-
 
     ae.sample_rate = sample_rate
     ae.channels = channels
@@ -189,8 +190,8 @@ audioEngineGetOutputBus :: proc(ae: ^AudioEngine) -> ^ma.node {
     return ma.engine_get_endpoint(&ae.engine)
 }
 
-audioEngineAttachNode :: proc(ae: ^AudioEngine, node: ^ma.node) {
-    ma.node_attach_output_bus(node, 0, audioEngineGetOutputBus(ae), 0)
+audioEngineAttachNode :: proc(ae: ^AudioEngine, node: ^ma.node) -> ma.result {
+    return ma.node_attach_output_bus(node, 0, audioEngineGetOutputBus(ae), 0)
 }
 
 audioEngineGetNodeGraph :: proc(ae: ^AudioEngine) -> ^ma.node_graph {
