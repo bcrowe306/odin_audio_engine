@@ -5,6 +5,7 @@ import "core:crypto"
 import sdl "vendor:sdl3"
 import vg "vendor:nanovg"
 import clay "clay-odin"
+import "core:fmt"
 
 ElementBounds :: [4]f64 // left, top, width, height
 
@@ -57,7 +58,6 @@ Element :: struct {
     onReleased: ^Signal,
     onClick: ^Signal,
     onDrag: ^Signal,
-
 }
 
 createElement :: proc(name: string ) -> ^Element {
@@ -166,7 +166,6 @@ element_processPressed :: proc(element: ^Element, events: []sdl.Event) {
 element_processDrag :: proc(element: ^Element) {
      if element.input_state->isMouseButtonDown(0) {
         mouse_drag := element.input_state->getDrag(0)
-            
             if abs(f64(mouse_drag.y)) > element.drag_threshold {
                 element.input_state.mouse_delta.y = 0
                 multiplier := 1.0

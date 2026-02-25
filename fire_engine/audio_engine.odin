@@ -24,16 +24,18 @@ AudioEngine :: struct {
     sample_rate: u32,
     buffer_size: u32,
     channels: u32,
+    audio_graph: ^AudioGraph,
+    playhead: ^PlayheadNode,
+    resource_manager: ^ResourceManager,
     format: ma.format,
     engine: ma.engine,
-    resource_manager: ma.resource_manager,
-    r_config: ma.resource_manager_config,
     d_config: ma.device_config,
     e_config: ma.engine_config,
     device: ma.device,
     initialized: bool,
     started: bool,
     ctx: EngineContext,
+    midi_message_queue: SPSC(1024, MidiMessage),
 
     // Methods
     init: proc(ae: ^AudioEngine),
@@ -44,6 +46,12 @@ AudioEngine :: struct {
     getOutputBus: proc(ae: ^AudioEngine) -> ^ma.node,
     attachNode: proc(ae: ^AudioEngine, node: ^ma.node) -> ma.result,
     getNodeGraph: proc(ae: ^AudioEngine) -> ^ma.node_graph,
+    attachAudioGraph: proc(ae: ^AudioEngine, graph: ^AudioGraph),
+    getPlayhead: proc(ae: ^AudioEngine) -> ^PlayheadNode,
+    loadWave: proc(ae: ^AudioEngine, path: string, async: bool = true) -> ^WaveResource,
+    releaseWave: proc(ae: ^AudioEngine, path: string) -> bool,
+    getWaveAudio: proc(ae: ^AudioEngine, path: string) -> (^WaveAudio, bool),
+    getWaveStatus: proc(ae: ^AudioEngine, path: string) -> ResourceLoadStatus,
 
 }
 
@@ -65,14 +73,15 @@ createEngine :: proc(sample_rate: u32 = 48000, channels: u32 = 2, format: ma.for
     ae.getOutputBus = audioEngineGetOutputBus
     ae.attachNode = audioEngineAttachNode
     ae.getNodeGraph = audioEngineGetNodeGraph
+    ae.attachAudioGraph = audioEngineAttachAudioGraph
+    ae.getPlayhead = audioEngineGetPlayhead
+    ae.loadWave = audioEngineLoadWave
+    ae.releaseWave = audioEngineReleaseWave
+    ae.getWaveAudio = audioEngineGetWaveAudio
+    ae.getWaveStatus = audioEngineGetWaveStatus
 
-    // Resource Manager Configuration
-    ae.r_config = ma.resource_manager_config_init()
-    ae.r_config.decodedChannels = ae.channels
-    ae.r_config.decodedSampleRate = ae.sample_rate
-    ae.r_config.decodedFormat = ae.format
-    
-    ma.resource_manager_init(&ae.r_config, &ae.resource_manager)
+    // Custom wave resource manager (uses wave_file_loader.odin, optionally async)
+    ae.resource_manager = createResourceManager()
 
     audioEngineApplyConfig(ae, auto_start)
 
@@ -130,10 +139,20 @@ audioEngineUninit :: proc(ae: ^AudioEngine) {
 
     ma.engine_uninit(&ae.engine)
     ma.device_uninit(&ae.device)
+
+    if ae.resource_manager != nil {
+        ae.resource_manager->shutdown()
+        free(ae.resource_manager)
+        ae.resource_manager = nil
+    }
+
     ae.initialized = false
 }
 
 audioEngineApplyConfig :: proc(ae: ^AudioEngine, auto_start: bool = true) {
+    previous_sample_rate := ae.ctx.sample_rate
+    previous_buffer_size := ae.ctx.buffer_size
+
 
     // Device Configuration
     ae.d_config = ma.device_config_init(ma.device_type.playback)
@@ -155,7 +174,6 @@ audioEngineApplyConfig :: proc(ae: ^AudioEngine, auto_start: bool = true) {
     ae.e_config.sampleRate = ae.sample_rate
     ae.e_config.periodSizeInFrames = ae.buffer_size
     ae.e_config.channels = ae.channels
-    ae.e_config.pResourceManager = &ae.resource_manager
     ae.e_config.pDevice = &ae.device
     ae.e_config.dataCallback = audioEngineCallback
     ae.e_config.noAutoStart = true
@@ -175,12 +193,39 @@ audioEngineApplyConfig :: proc(ae: ^AudioEngine, auto_start: bool = true) {
         audioEngineStart(ae)
     }
 
+    if ae.audio_graph != nil {
+        if previous_sample_rate != ae.sample_rate || previous_buffer_size != ae.buffer_size {
+            ae.audio_graph->markEngineDirty()
+        }
+    }
+
 }
 
 audioEngineCallback :: proc "c" (device: ^ma.device, output: rawptr, input: rawptr, frameCount: u32) {
     context = runtime.default_context()
     ae := cast(^AudioEngine)device.pUserData
-    ma.engine_read_pcm_frames(&ae.engine, output, u64(frameCount), nil)
+
+    if ae.audio_graph != nil {
+        sample_count := int(frameCount) * int(ae.channels)
+        out_samples := (cast([^]f32)output)[:sample_count]
+
+        // Clear output buffer before graph render pass.
+        for i in 0..<len(out_samples) {
+            out_samples[i] = 0
+        }
+
+        graph_context := AudioGraphEngineContext{
+            sample_rate = ae.sample_rate,
+            render_quantum = ae.ctx.render_quantum,
+            buffer_size = ae.buffer_size,
+            output_channel_count = ae.channels,
+        }
+
+        ae.audio_graph->process(graph_context, &out_samples, int(frameCount))
+    } else {
+        // Fallback to miniaudio node graph when no custom graph is attached.
+        ma.engine_read_pcm_frames(&ae.engine, output, u64(frameCount), nil)
+    }
 
     // Increment the render quantum
     ae.ctx.render_quantum += 1
@@ -196,4 +241,52 @@ audioEngineAttachNode :: proc(ae: ^AudioEngine, node: ^ma.node) -> ma.result {
 
 audioEngineGetNodeGraph :: proc(ae: ^AudioEngine) -> ^ma.node_graph {
     return &ae.engine.nodeGraph
+}
+
+audioEngineAttachAudioGraph :: proc(ae: ^AudioEngine, graph: ^AudioGraph) {
+    ae.audio_graph = graph
+
+    if ae.audio_graph == nil {
+        return
+    }
+
+    // Ensure a default playhead exists and is attached to the currently attached graph.
+    ae.playhead = createPlayhead()
+    ae.playhead.sample_rate = f64(ae.sample_rate)
+    ae.playhead->calculateSamplesPerTick()
+    ae.playhead->attachToGraph(ae.audio_graph)
+
+    ae.audio_graph->markEngineDirty()
+}
+
+audioEngineGetPlayhead :: proc(ae: ^AudioEngine) -> ^PlayheadNode {
+    return ae.playhead
+}
+
+audioEngineLoadWave :: proc(ae: ^AudioEngine, path: string, async: bool = true) -> ^WaveResource {
+    if ae.resource_manager == nil {
+        return nil
+    }
+    return ae.resource_manager->acquireWave(path, ae.sample_rate, async)
+}
+
+audioEngineReleaseWave :: proc(ae: ^AudioEngine, path: string) -> bool {
+    if ae.resource_manager == nil {
+        return false
+    }
+    return ae.resource_manager->releaseWave(path)
+}
+
+audioEngineGetWaveAudio :: proc(ae: ^AudioEngine, path: string) -> (^WaveAudio, bool) {
+    if ae.resource_manager == nil {
+        return nil, false
+    }
+    return ae.resource_manager->getWaveAudio(path)
+}
+
+audioEngineGetWaveStatus :: proc(ae: ^AudioEngine, path: string) -> ResourceLoadStatus {
+    if ae.resource_manager == nil {
+        return .Unloaded
+    }
+    return ae.resource_manager->getWaveStatus(path)
 }

@@ -4,6 +4,12 @@ import "core:fmt"
 import sdl "vendor:sdl3"
 import vg "vendor:nanovg"
 
+
+// TODO: Add layers for drawing and events
+// TODO: Add support for ui scaling and input events.
+// TODO: Add support for clay to respond to ui scaling
+
+
 UI :: struct {
     cr : ^vg.Context,
     backgound_color: vg.Color,

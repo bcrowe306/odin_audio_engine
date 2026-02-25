@@ -1,0 +1,6 @@
+FilterNode:
+  type: enum -  Lowpass, Highpass, Bandpass, Notch, MorphSvf
+  cutoff_frequency_hz: f32, 20 - 20000
+  resonance_q: f32, 0.1 - 20
+  morph_parameter: f32, 0 - 1 (only for MorphSvf)
+  slope: 12,24 db/octave

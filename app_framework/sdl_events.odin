@@ -4,7 +4,7 @@ import sdl "vendor:sdl3"
 import clay "clay-odin"
 
 // Event helper to detect sdl mouse click within element bounds
-isMouseClickWithinElement :: proc(event: sdl.Event, element: ^Element, button_index: u8, scale: f32 = 1.5) -> bool {
+isMouseClickWithinElement :: proc(event: sdl.Event, element: ^Element, button_index: u8, scale: f32 = 1) -> bool {
     if event.type == sdl.EventType.MOUSE_BUTTON_DOWN {
         
         mouse_x := event.button.x / scale
@@ -30,7 +30,7 @@ isInBounds :: proc(x: f32, y: f32, bounds: clay.BoundingBox) -> bool {
 }
 
 // Detect if mouse is hovering over element
-isMouseHoveringElement :: proc(event: sdl.Event, element: ^Element, scale: f32 = 1.5) -> bool {
+isMouseHoveringElement :: proc(event: sdl.Event, element: ^Element, scale: f32 = 1) -> bool {
     if event.type == sdl.EventType.MOUSE_MOTION {
         mouse_x := event.motion.x / scale
         mouse_y := event.motion.y / scale
@@ -54,7 +54,7 @@ InputState :: struct {
     isClicked : proc(events: []sdl.Event, element: ^Element, button_index: u8, scale: f32) -> bool,
 }
 
-createInputState :: proc(window_scale: f32 = 1.5) -> ^InputState {
+createInputState :: proc(window_scale: f32 = 1.0) -> ^InputState {
     state := new(InputState)
     state.window_scale = window_scale
     state.mouse_position = {0, 0}
@@ -108,7 +108,7 @@ isMouseButtonDown :: proc(state: ^InputState, button: u8) -> bool {
     }
     return state.mouse_buttons[button]
 }
-isMouseClicked :: proc(events: []sdl.Event, element: ^Element, button_index: u8, scale: f32 = 1.5) -> bool {
+isMouseClicked :: proc(events: []sdl.Event, element: ^Element, button_index: u8, scale: f32 = 1.0) -> bool {
     for event in events {
         if isMouseClickWithinElement(event, element, button_index, scale) {
             return true
