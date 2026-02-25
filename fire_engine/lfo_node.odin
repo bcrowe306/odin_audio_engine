@@ -1,6 +1,6 @@
-package main
-
+package fire_engine
 import "core:math"
+
 
 LFO_MIN_RATE_HZ :: f32(0.01)
 LFO_MAX_RATE_HZ :: f32(20.0)
@@ -305,7 +305,7 @@ lfoNodeGetOffsetNormalized :: proc(node: ^LFONode) -> f32 {
 	return node.offset_normalized
 }
 
-lfoNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+lfoNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	node := cast(^LFONode)graph_node.user_data
 	if node == nil {
 		return

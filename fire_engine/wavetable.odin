@@ -1,4 +1,4 @@
-package main
+package fire_engine
 import "core:math"
 import "core:math/rand"
 import "core:crypto"

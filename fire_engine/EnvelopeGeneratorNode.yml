@@ -1,5 +1,0 @@
-EnvelopeGeneratorNode:
-  Attack: f32, 0 - 20s
-  Decay: f32, 1ms - 60s
-  Sustain: f32, 0 - 1 or -inf to 0db
-  Release: f32, 1ms - 60s

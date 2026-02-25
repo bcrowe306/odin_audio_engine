@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 import "core:math"
 import "core:os"
 import "core:strings"

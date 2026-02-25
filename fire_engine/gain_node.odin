@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 import "core:math"
 import "core:fmt"
 
@@ -119,7 +118,7 @@ gainNodeApplyGainModulation :: proc(input: ^ModulationInput, node: ^AudioNode, s
 	gain_node.modulation_gain_offset = sum / f32(count)
 }
 
-gainNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+gainNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	node := cast(^GainNode)graph_node.user_data
 	if node == nil {
 		return

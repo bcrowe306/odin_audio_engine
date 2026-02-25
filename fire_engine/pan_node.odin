@@ -1,6 +1,6 @@
-package main
-
+package fire_engine
 import "core:math"
+
 
 PanNode :: struct {
 	node_id: u64,
@@ -34,7 +34,7 @@ panNodeGetPan :: proc(node: ^PanNode) -> f32 {
 	return node.pan
 }
 
-panNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+panNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	node := cast(^PanNode)graph_node.user_data
 	if node == nil {
 		return

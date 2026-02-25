@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 import "core:math"
 
 FILTER_MIN_CUTOFF_HZ :: f32(20.0)
@@ -236,7 +235,7 @@ filterNodeApplyResonanceModulation :: proc(input: ^ModulationInput, node: ^Audio
 	filter_node.modulation_resonance_value = clamp(sum/f32(count), -1.0, 1.0)
 }
 
-filterNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+filterNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	node := cast(^FilterNode)graph_node.user_data
 	if node == nil {
 		return

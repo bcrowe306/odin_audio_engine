@@ -36,6 +36,51 @@
             "problemMatcher": []
         },
         {
+            "label": "build-fire_engine",
+            "type": "shell",
+            "dependsOn": "create-build-dir",
+            "command": "odin",
+            "args": [
+                "build",
+                "fire_engine",
+                "-out:build/${config:fire_engine_file_name}"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "build-fire_engine-debug",
+            "type": "shell",
+            "dependsOn": "create-build-dir",
+            "command": "odin",
+            "args": [
+                "build",
+                "fire_engine",
+                "-out:build/${config:fire_engine_file_name}_debug",
+                "-debug"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "run-odin",
             "type": "shell",
             "command": "odin",

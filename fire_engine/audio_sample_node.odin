@@ -1,6 +1,7 @@
-package main
-
+package fire_engine
 import "core:math"
+import "core:fmt"
+
 
 MIDI_NOTE_A4 :: 69.0
 MIDI_FREQ_A4 :: 440.0
@@ -37,7 +38,7 @@ AudioSampleNode :: struct {
 	setReadCursor: proc(node: ^AudioSampleNode, frame: f64),
 	getReadCursor: proc(node: ^AudioSampleNode) -> f64,
 }
-
+// This node is responsible for playing back an audio sample loaded from a file. It supports setting a playback range, looping, and adjusting the playback rate. The node reads audio data from the engine's resource manager and outputs it to the audio graph. It also processes incoming MIDI messages, which can be used for triggering playback or modulating parameters in the future.
 createAudioSampleNode :: proc(engine: ^AudioEngine, path: string, async: bool = true, looping: bool = false) -> ^AudioSampleNode {
 	node := new(AudioSampleNode)
 	node.engine = engine
@@ -138,7 +139,7 @@ audioSampleNodeGetReadCursor :: proc(node: ^AudioSampleNode) -> f64 {
 	return node.read_cursor
 }
 
-audioSampleNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+audioSampleNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	sample_node := cast(^AudioSampleNode)graph_node.user_data
 	if sample_node == nil || sample_node.engine == nil {
 		return

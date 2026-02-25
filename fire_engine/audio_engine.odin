@@ -1,8 +1,9 @@
-package main
-
+package fire_engine
 import "base:runtime"
 import "core:fmt"
 import ma "vendor:miniaudio"
+
+MIDI_MESSAGE_QUEUE_SIZE :: 1024
 
 DEFAULT_SAMPLE_RATE :: 48000
 DEFAULT_CHANNELS :: 2
@@ -11,6 +12,8 @@ DEFAULT_BUFFER_SIZE :: 256
 
 inputChannels := [2]u32{2,2}
 outputChannels := [2]u32{2,2}
+
+// TODO: Change to use ma.device and not ma.engine
 
 EngineContext :: struct {
     engine: ^AudioEngine,
@@ -35,18 +38,18 @@ AudioEngine :: struct {
     initialized: bool,
     started: bool,
     ctx: EngineContext,
-    midi_message_queue: SPSC(1024, MidiMessage),
+    midi_message_queue: SPSC(MIDI_MESSAGE_QUEUE_SIZE, ShortMessage),
+    midi_messages_to_process: [MIDI_MESSAGE_QUEUE_SIZE]ShortMessage,
 
     // Methods
     init: proc(ae: ^AudioEngine),
     uninit: proc(ae: ^AudioEngine),
-    applyConfig: proc(ae: ^AudioEngine, auto_start: bool),
+    applyConfig: proc(ae: ^AudioEngine),
     start: proc(ae: ^AudioEngine),
     stop: proc(ae: ^AudioEngine),
     getOutputBus: proc(ae: ^AudioEngine) -> ^ma.node,
     attachNode: proc(ae: ^AudioEngine, node: ^ma.node) -> ma.result,
     getNodeGraph: proc(ae: ^AudioEngine) -> ^ma.node_graph,
-    attachAudioGraph: proc(ae: ^AudioEngine, graph: ^AudioGraph),
     getPlayhead: proc(ae: ^AudioEngine) -> ^PlayheadNode,
     loadWave: proc(ae: ^AudioEngine, path: string, async: bool = true) -> ^WaveResource,
     releaseWave: proc(ae: ^AudioEngine, path: string) -> bool,
@@ -63,6 +66,7 @@ createEngine :: proc(sample_rate: u32 = 48000, channels: u32 = 2, format: ma.for
     ae.channels = channels
     ae.format = format
     ae.buffer_size = buffer_size
+    ae.midi_message_queue = SPSC(MIDI_MESSAGE_QUEUE_SIZE, ShortMessage){}
 
     // Methods
     ae.init = audioEngineInit
@@ -73,18 +77,12 @@ createEngine :: proc(sample_rate: u32 = 48000, channels: u32 = 2, format: ma.for
     ae.getOutputBus = audioEngineGetOutputBus
     ae.attachNode = audioEngineAttachNode
     ae.getNodeGraph = audioEngineGetNodeGraph
-    ae.attachAudioGraph = audioEngineAttachAudioGraph
     ae.getPlayhead = audioEngineGetPlayhead
     ae.loadWave = audioEngineLoadWave
     ae.releaseWave = audioEngineReleaseWave
     ae.getWaveAudio = audioEngineGetWaveAudio
     ae.getWaveStatus = audioEngineGetWaveStatus
-
-    // Custom wave resource manager (uses wave_file_loader.odin, optionally async)
-    ae.resource_manager = createResourceManager()
-
-    audioEngineApplyConfig(ae, auto_start)
-
+    audioEngineCreateAudioGraph(ae)
     return ae
 }
 
@@ -109,6 +107,8 @@ audioEngineStop :: proc(ae: ^AudioEngine) {
 }
 
 audioEngineInit :: proc(ae: ^AudioEngine) {
+
+    audioEngineApplyConfig(ae)
 
     // Initialize the engine
     fmt.printfln("Initializing audio engine with sample rate: %d, channels: %d, format: %d, buffer size: %d", ae.sample_rate, ae.channels, ae.format, ae.buffer_size)
@@ -139,17 +139,10 @@ audioEngineUninit :: proc(ae: ^AudioEngine) {
 
     ma.engine_uninit(&ae.engine)
     ma.device_uninit(&ae.device)
-
-    if ae.resource_manager != nil {
-        ae.resource_manager->shutdown()
-        free(ae.resource_manager)
-        ae.resource_manager = nil
-    }
-
     ae.initialized = false
 }
 
-audioEngineApplyConfig :: proc(ae: ^AudioEngine, auto_start: bool = true) {
+audioEngineApplyConfig :: proc(ae: ^AudioEngine) {
     previous_sample_rate := ae.ctx.sample_rate
     previous_buffer_size := ae.ctx.buffer_size
 
@@ -183,16 +176,6 @@ audioEngineApplyConfig :: proc(ae: ^AudioEngine, auto_start: bool = true) {
         audioEngineStop(ae)
     }
 
-    if ae.initialized {
-        audioEngineUninit(ae)
-    }
-
-    audioEngineInit(ae)
-
-    if auto_start {
-        audioEngineStart(ae)
-    }
-
     if ae.audio_graph != nil {
         if previous_sample_rate != ae.sample_rate || previous_buffer_size != ae.buffer_size {
             ae.audio_graph->markEngineDirty()
@@ -204,6 +187,20 @@ audioEngineApplyConfig :: proc(ae: ^AudioEngine, auto_start: bool = true) {
 audioEngineCallback :: proc "c" (device: ^ma.device, output: rawptr, input: rawptr, frameCount: u32) {
     context = runtime.default_context()
     ae := cast(^AudioEngine)device.pUserData
+
+    midi_msg_count := 0
+    // fmt.printfln("PHead: %d, PTail: %d", ae.midi_message_queue.producer_head, ae.midi_message_queue.producer_tail)
+    // fmt.printfln("CHead: %d, CTail: %d", ae.midi_message_queue.consumer_head, ae.midi_message_queue.consumer_tail)
+    single_msg_buffer := [1]ShortMessage{}
+    for msg, ok := spsc_pop(&ae.midi_message_queue); ok == true; msg, ok = spsc_pop(&ae.midi_message_queue) {
+        if midi_msg_count < MIDI_MESSAGE_QUEUE_SIZE {
+            ae.midi_messages_to_process[midi_msg_count] = msg
+            midi_msg_count += 1
+        } else {
+            fmt.println("Audio engine MIDI message queue overflow. Consider increasing the queue size.")
+            break
+        }
+    }
 
     if ae.audio_graph != nil {
         sample_count := int(frameCount) * int(ae.channels)
@@ -221,14 +218,16 @@ audioEngineCallback :: proc "c" (device: ^ma.device, output: rawptr, input: rawp
             output_channel_count = ae.channels,
         }
 
-        ae.audio_graph->process(graph_context, &out_samples, int(frameCount))
+        ae.audio_graph->process(graph_context, &out_samples, int(frameCount), ae.midi_messages_to_process[:midi_msg_count])
+        // Clear MIDI messages after processing
     } else {
         // Fallback to miniaudio node graph when no custom graph is attached.
         ma.engine_read_pcm_frames(&ae.engine, output, u64(frameCount), nil)
     }
-
+    
     // Increment the render quantum
     ae.ctx.render_quantum += 1
+    midi_msg_count = 0
 }
 
 audioEngineGetOutputBus :: proc(ae: ^AudioEngine) -> ^ma.node {
@@ -243,12 +242,8 @@ audioEngineGetNodeGraph :: proc(ae: ^AudioEngine) -> ^ma.node_graph {
     return &ae.engine.nodeGraph
 }
 
-audioEngineAttachAudioGraph :: proc(ae: ^AudioEngine, graph: ^AudioGraph) {
-    ae.audio_graph = graph
-
-    if ae.audio_graph == nil {
-        return
-    }
+audioEngineCreateAudioGraph :: proc(ae: ^AudioEngine) {
+    ae.audio_graph = createAudioGraph()
 
     // Ensure a default playhead exists and is attached to the currently attached graph.
     ae.playhead = createPlayhead()

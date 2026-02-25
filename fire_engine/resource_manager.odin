@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 import "base:runtime"
 import "core:sync"
 import chan "core:sync/chan"

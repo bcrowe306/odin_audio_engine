@@ -22,6 +22,17 @@
             "internalConsoleOptions": "openOnSessionStart"
         },
         {
+            "name": "Debug Fire Engine",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/${config:fire_engine_file_name}_debug",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build-fire_engine-debug",
+            "stopOnEntry": false,
+            "internalConsoleOptions": "openOnSessionStart"
+        },
+        {
             "name": "Profile Odin Program",
             "type": "lldb",
             "request": "launch",

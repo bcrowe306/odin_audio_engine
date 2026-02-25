@@ -1,5 +1,4 @@
-package main 
-
+package fire_engine
 import "core:encoding/uuid"
 import "core:crypto"
 

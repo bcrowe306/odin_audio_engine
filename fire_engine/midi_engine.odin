@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 
 import "core:thread"
 import "vendor:portmidi"
@@ -26,7 +25,7 @@ MidiEngine :: struct {
     input_threads: map[string]^thread.Thread,
     control_surfaces: map[string]HandleMidiInputProc, // Map of control surface name to pointer to control surface struct. This allows the MIDI engine to route incoming MIDI messages to the appropriate control surface for handling.
     auto_start_all: bool,
-    audio_engine_midi_message_queue: ^SPSC(1024, MidiMessage),
+    audio_engine_midi_message_queue: ^SPSC(1024, ShortMessage),
 
     midiInputCallback: proc(engine: ^MidiEngine, msg: ^ShortMessage),
     startInputThread: proc(engine: ^MidiEngine, device: ^MidiDevice),
@@ -35,8 +34,8 @@ MidiEngine :: struct {
     closeDeviceInput: proc(engine: ^MidiEngine, device: ^MidiDevice),
     openDeviceOutput: proc(device: ^MidiDevice),
     closeDeviceOutput: proc(device: ^MidiDevice),
-    initialize: proc(engine: ^MidiEngine),
-    uninitialize: proc(engine: ^MidiEngine),
+    init: proc(engine: ^MidiEngine),
+    uninit: proc(engine: ^MidiEngine),
     enableDevice: proc(engine: ^MidiEngine, deviceName: string) -> bool,
     disableDevice: proc(engine: ^MidiEngine, deviceName: string) -> bool,
     sendMsg: proc(engine: ^MidiEngine, deviceName: string, msg: ShortMessage),
@@ -57,12 +56,12 @@ createMidiEngine :: proc() -> ^MidiEngine {
     engine.closeDeviceInput = closeDeviceInput
     engine.openDeviceOutput = openDeviceOutput
     engine.closeDeviceOutput = closeDeviceOutput
-    engine.initialize = initializeMidiEngine
+    engine.init = initializeMidiEngine
     engine.enableDevice = enabledDevice
     engine.disableDevice = disableDevice
     engine.sendMsg = sendMsg
     engine.sendSysexMsg = sendSysexMsg
-    engine.uninitialize = unInitializeMidieEngine
+    engine.uninit = unInitializeMidieEngine
     return engine
 }
 
@@ -96,6 +95,9 @@ midiInputCallback :: proc(engine: ^MidiEngine, msg: ^ShortMessage) {
         // If the message was not handled by a control surface, we can choose to route it to the audio engine or ignore it.
         // For now, we'll just print it out for debugging purposes.
         if engine.audio_engine_midi_message_queue != nil {
+            if engine.debug {
+                fmt.printfln("Routing MIDI message from device %s to audio engine: %s", msg.device, msg->toHexString())
+            }
             spsc_push(engine.audio_engine_midi_message_queue, msg^)
         }
     }

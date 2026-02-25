@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 
 import "core:thread"
 import "vendor:portmidi"

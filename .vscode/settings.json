@@ -1,4 +1,5 @@
 {
     "project_name": "Odin Engine",
-    "project_file_name": "odin_engine"
+    "project_file_name": "odin_engine",
+    "fire_engine_file_name": "fire_engine"
 }

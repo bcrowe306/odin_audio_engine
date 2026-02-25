@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 import "core:fmt"
 import "core:time"
 
@@ -9,18 +8,16 @@ BeatTriggerData :: struct {
 }
 
 main :: proc() {
-	ae := createEngine(auto_start = true)
-	defer ae->uninit()
+	fe := createFireEngine()
+	fe.midi_engine.debug = true
+	fe->init()
+	fe->start()
+	defer fe->uninit()
 
-	graph := createAudioGraph()
-	defer graph->uninit()
-
-	ae->attachAudioGraph(graph)
-
-	sample_node := createAudioSampleNode(ae, "perc.wav", true, false)
+	sample_node := createAudioSampleNode(fe.audio_engine, "perc.wav", true, false)
 	defer sample_node->releaseResource()
 	sample_node->setRateFromMidiNote(60)
-	sample_node->attachToGraph(graph)
+	sample_node->attachToGraph(fe.audio_engine.audio_graph)
 	filter_node := createFilterNode(
 		filter_type = .Highpass,
 		cutoff_frequency_hz = 1200,
@@ -28,10 +25,10 @@ main :: proc() {
 		morph_parameter = 0.5,
 		slope = .Db12,
 	)
-	filter_node->attachToGraph(graph)
+	filter_node->attachToGraph(fe.audio_engine.audio_graph)
 
 	gain_node := createGainNode(initial_gain = 1)
-	gain_node->attachToGraph(graph)
+	gain_node->attachToGraph(fe.audio_engine.audio_graph)
 	lfo_node := createLFONode(
 		wavetable_name = "sine",
 		rate_mode = .Hz,
@@ -44,17 +41,17 @@ main :: proc() {
 		offset_normalized = 0.0,
 		tempo_bpm = 120,
 	)
-	lfo_node->attachToGraph(graph)
-	_ = graph->connectModulationInput(gain_node.node_id, 0, lfo_node.node_id, 0)
+	lfo_node->attachToGraph(fe.audio_engine.audio_graph)
+	_ = fe.audio_engine.audio_graph->connectModulationInput(gain_node.node_id, 0, lfo_node.node_id, 0)
 
 	pan_node := createPanNode(initial_pan = 0.0)
-	pan_node->attachToGraph(graph)
-	graph->queueConnect(sample_node.node_id, 0, filter_node.node_id, 0)
-	graph->queueConnect(filter_node.node_id, 0, gain_node.node_id, 0)
-	graph->queueConnect(gain_node.node_id, 0, pan_node.node_id, 0)
-	graph->connectToEndpoint(pan_node.node_id)
+	pan_node->attachToGraph(fe.audio_engine.audio_graph)
+	fe.audio_engine.audio_graph->queueConnect(sample_node.node_id, 0, filter_node.node_id, 0)
+	fe.audio_engine.audio_graph->queueConnect(filter_node.node_id, 0, gain_node.node_id, 0)
+	fe.audio_engine.audio_graph->queueConnect(gain_node.node_id, 0, pan_node.node_id, 0)
+	fe.audio_engine.audio_graph->connectToEndpoint(pan_node.node_id)
 
-	playhead := ae->getPlayhead()
+	playhead := fe.audio_engine->getPlayhead()
     playhead->setTempo(140)
 	if playhead != nil {
 		beat_trigger := new(BeatTriggerData)

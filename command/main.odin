@@ -1,11 +1,8 @@
 package main
-
 import "core:fmt"
-import app_framework "app_framework"
-import vg "vendor:nanovg"
-import clay "app_framework/clay-odin"
 import "core:encoding/uuid"
 import "core:crypto"
+
 
 CommandExecProc:: proc(cmd: ^Command)
 CommandUndoProc:: proc(cmd: ^Command)
@@ -72,14 +69,93 @@ Command :: struct {
     
 }
 
-FloatCommand :: struct {
+Float32Command :: struct {
     using command: Command,
     new_value: f32,
     previous_value: f32,
 }
 
-createFloatCommand :: proc(id: uuid.Identifier, execute: proc(cmd: ^Command), undo: proc(cmd: ^Command), new_value: f32, previous_value: f32, user_data: rawptr) -> ^FloatCommand {
-    cmd := new(FloatCommand)
+Float64Command :: struct {
+    using command: Command,
+    new_value: f64,
+    previous_value: f64,
+}
+
+IntCommand :: struct {
+    using command: Command,
+    new_value: int,
+    previous_value: int,
+}
+
+UInt32Command :: struct {
+    using command: Command,
+    new_value: u32,
+    previous_value: u32,
+}
+
+UInt64Command :: struct {
+    using command: Command,
+    new_value: u64,
+    previous_value: u64,
+}
+
+BoolCommand :: struct {
+    using command: Command,
+    new_value: bool,
+    previous_value: bool,
+}
+
+I32Command :: struct {
+    using command: Command,
+    new_value: i32,
+    previous_value: i32,
+}
+
+I64Command :: struct {
+    using command: Command,
+    new_value: i64,
+    previous_value: i64,
+}
+
+StringCommand :: struct {
+    using command: Command,
+    new_value: string,
+    previous_value: string,
+}
+
+Vector32Command :: struct {
+    using command: Command,
+    new_value: []f32,
+    previous_value: []f32,
+}
+
+Vector64Command :: struct {
+    using command: Command,
+    new_value: []f64,
+    previous_value: []f64,
+}
+
+VectorIntCommand :: struct {
+    using command: Command,
+    new_value: []int,
+    previous_value: []int,
+}
+
+VectorUInt32Command :: struct {
+    using command: Command,
+    new_value: []u32,
+    previous_value: []u32,
+}
+
+VectorUInt64Command :: struct {
+    using command: Command,
+    new_value: []u64,
+    previous_value: []u64,
+}
+
+
+createFloatCommand :: proc(id: uuid.Identifier, execute: proc(cmd: ^Command), undo: proc(cmd: ^Command), new_value: f32, previous_value: f32, user_data: rawptr) -> ^Float32Command {
+    cmd := new(Float32Command)
     cmd.id = id
     cmd.execute = execute
     cmd.undo = undo
@@ -92,10 +168,7 @@ createFloatCommand :: proc(id: uuid.Identifier, execute: proc(cmd: ^Command), un
 Parameter :: struct {
     id: uuid.Identifier,
     controller: ^CommandController,
-    name: string,
     listeners: [dynamic]proc(new_value: any), // TODO: will be signals instead of listeners.
-    set: proc(param: ^Parameter, new_value: any),
-    get: proc(param: ^Parameter) -> any,
 
     addListener: proc(param: ^Parameter, listener: proc(new_value: any)),
     removeListener: proc(param: ^Parameter, listener: proc(new_value: any)),
@@ -123,14 +196,18 @@ configureParameter :: proc(parameter: ^Parameter)  {
     parameter.removeListener = removeListener
 }
 
-
+// Concrete parameter struct must have json tags for fields.
 FloatParameter :: struct {
     using parameter: Parameter,
+    name: string,
     value : f32,
     default_value: f32,
     min_value: f32,
     max_value: f32,
+    set: proc(param: ^FloatParameter, new_value: f32),
+    get: proc(param: ^FloatParameter) -> f32,
 }
+
 
 
 
@@ -143,13 +220,15 @@ createFloatParameter :: proc(controller: ^CommandController, name: string, defau
     param.name = name
     param.min_value = min_value
     param.max_value = max_value
+    param.set = setFloatParameterValue
+    param.get = getFloatParameterValue
 
     return param
 
 }
 
 executeFloatParameterChange :: proc(cmd_ptr: ^Command) {
-    cmd := cast(^FloatCommand)cmd_ptr
+    cmd := cast(^Float32Command)cmd_ptr
     param := cast(^FloatParameter)cmd.user_data
     if param == nil {
         return
@@ -162,23 +241,24 @@ executeFloatParameterChange :: proc(cmd_ptr: ^Command) {
 }
 
 undoFloatParameterChange :: proc(cmd_ptr: ^Command) {
-    cmd := cast(^FloatCommand)cmd_ptr
+    cmd := cast(^Float32Command)cmd_ptr
     param := cast(^FloatParameter)cmd.user_data
     if param == nil {
         return
     }
     // print command new and previous values for debugging
-    fmt.printfln("Undoing command: %s, Parameter: %s", cmd.id, param.name)
-    fmt.printfln("Cmd values New_value: %f, Previous_value: %f", cmd.new_value, cmd.previous_value)
     param.value = cmd.new_value
-        fmt.printfln("From: %f, To: %f", param.value, cmd.previous_value)
-
     for listener in param.listeners {
         listener(cmd.previous_value)
     }
 }
 
-setFloatParameterValue :: proc(param: ^FloatParameter, new_value: f32) {
+
+setFloatParameterValue :: proc(param_ptr: ^FloatParameter, new_value: f32) {
+    param := cast(^FloatParameter)param_ptr
+    if param == nil {
+        return
+    }
     val := clamp(new_value, param.min_value, param.max_value)
     if val != param.value {
         new_cmd := createFloatCommand(
@@ -192,14 +272,16 @@ setFloatParameterValue :: proc(param: ^FloatParameter, new_value: f32) {
         param.controller->executeCommand(param.id, new_cmd)
     }
 }
-
+getFloatParameterValue :: proc(param_ptr: ^FloatParameter) -> f32 {
+    param := cast(^FloatParameter)param_ptr
+    if param == nil {
+        return 0
+    }
+    return param.value
+}
 
 
 main :: proc() {
-    using fmt
-    // Write to json file
-    EncodeTest("output.json")
-
     controller := createController()
     defer destroyController(controller)
 
@@ -207,107 +289,8 @@ main :: proc() {
     volume_param->addListener(proc(new_value: any) {
         fmt.printfln("Volume changed to: %f", new_value.(f32))
     })
-    setFloatParameterValue(volume_param, 0.8)
-    setFloatParameterValue(volume_param, 0.3)
+    volume_param->set(0.8)
+    volume_param->set(0.3)
     controller->undoCommand()
-    
-    
-
-
-
-    // Create the application UI
-    ui := app_framework.createUI(vg.Color{0, 0, 0, 255})
-    main_page := app_framework.createPage("main")
-    second_page := app_framework.createPage("second")
-    button_el := app_framework.createElement("button")
-    button_2 := app_framework.createElement("button2")
-    button_2.onDraw = proc(el: ^app_framework.Element, ctx: ^vg.Context, user_data: rawptr) {
-        vg.BeginPath(ctx)
-        vg.Rect(ctx, el.bounds.x, el.bounds.y, el.bounds.width, el.bounds.height)
-        vg.FillColor(ctx, vg.RGBA(200, 0, 20, 255))
-        vg.Fill(ctx)
-        vg.FontSize(ctx, 18.0)
-        vg.FontFace(ctx, "opensans")
-        vg.FillColor(ctx, vg.RGBA(255, 255, 255, 255))
-        vg.Text(ctx, el.bounds.x + 10, el.bounds.y + 30, "Main Page")
-    }
-    app_framework.signalConnect(button_2.onPressed, proc(value: any, data: rawptr) {
-        ui := cast(^app_framework.UI)data
-        fmt.printfln("Button clicked, switching to main page")
-        ui.router->push("main")
-     }, ui )
-     
-    button_el.onDraw = proc(el: ^app_framework.Element, ctx: ^vg.Context, user_data: rawptr) {
-        vg.BeginPath(ctx)
-        vg.Rect(ctx, el.bounds.x, el.bounds.y, el.bounds.width, el.bounds.height)
-        vg.FillColor(ctx, vg.RGBA(0, 128, 255, 255))
-        vg.Fill(ctx)
-        vg.FontSize(ctx, 18.0)
-        vg.FontFace(ctx, "opensans")
-        vg.FillColor(ctx, vg.RGBA(255, 255, 255, 255))
-        vg.Text(ctx, el.bounds.x + 10, el.bounds.y + 30, "Second Page")
-    }
-
-    
-    
-    second_page.addChild(second_page, button_2)
-    second_page.createLayout = proc(page: ^app_framework.Page) -> clay.ClayArray(clay.RenderCommand) {
-        using clay
-        BeginLayout()
-        if UI()({
-            layout = {
-                layoutDirection = LayoutDirection.TopToBottom,
-                childAlignment = {x= LayoutAlignmentX.Left, y = LayoutAlignmentY.Top},
-                sizing = {width = SizingGrow(), height = SizingGrow()},
-                padding = PaddingAll(5),
-            }
-        }) {
-            if UI()({
-                layout = {
-                    layoutDirection = LayoutDirection.LeftToRight,
-                    childAlignment = {x= LayoutAlignmentX.Left, y = LayoutAlignmentY.Top},
-                    sizing = {width = SizingFixed(800), height = SizingFixed(50)},
-                    padding = PaddingAll(5),
-                },
-                custom = { customData = page.elements["button2"] },
-            }) {}
-        }
-        return EndLayout()
-    }
-    main_page.addChild(main_page, button_el)
-    main_page.createLayout = proc(page: ^app_framework.Page) -> clay.ClayArray(clay.RenderCommand) {
-        using clay
-        BeginLayout()
-        if UI()({
-            layout = {
-                layoutDirection = LayoutDirection.TopToBottom,
-                childAlignment = {x= LayoutAlignmentX.Left, y = LayoutAlignmentY.Top},
-                sizing = {width = SizingGrow(), height = SizingGrow()},
-                padding = PaddingAll(5),
-            }
-        }) {
-            if UI()({
-                layout = {
-                    layoutDirection = LayoutDirection.LeftToRight,
-                    childAlignment = {x= LayoutAlignmentX.Left, y = LayoutAlignmentY.Top},
-                    sizing = {width = SizingFixed(800), height = SizingFixed(50)},
-                    padding = PaddingAll(5),
-                },
-                custom = { customData = page.elements["button"] },
-            }) {}
-        }
-        return EndLayout()
-    }
-    ui.addPage(ui, main_page)
-    ui.addPage(ui, second_page)
-    fmt.printfln("Starting application ui")
-    ui.router->push("main")
-
-    app := app_framework.App_Create("Odin Audio Engine", 1080, 288, 60.0)
-    app_framework.App_Init(app)
-
-    app.ui = ui
-    app.run(app)
-    app_framework.App_Uninit(app)
 
 }

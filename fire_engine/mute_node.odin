@@ -1,7 +1,7 @@
-package main
-
+package fire_engine
 DEFAULT_MUTE_NODE_RAMP_SECONDS :: f32(0.01)
 MIN_MUTE_NODE_RAMP_SECONDS :: f32(0.0001)
+
 
 MuteNode :: struct {
 	node_id: u64,
@@ -54,7 +54,7 @@ muteNodeGetRampSeconds :: proc(node: ^MuteNode) -> f32 {
 	return node.ramp_seconds
 }
 
-muteNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+muteNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	node := cast(^MuteNode)graph_node.user_data
 	if node == nil {
 		return

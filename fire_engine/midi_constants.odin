@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 MIDI_STATUS :: enum(u8) {
     NOTE_OFF = 0x80,
     NOTE_ON = 0x90,

@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 import "vendor:portmidi"
 import "core:math"
 import "core:fmt"

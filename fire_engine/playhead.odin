@@ -1,6 +1,6 @@
-package main
-
+package fire_engine
 import "core:fmt"
+
 
 MAX_TEMPO :: 300.0
 MIN_TEMPO :: 20.0
@@ -142,7 +142,7 @@ playheadAttachToGraph :: proc(playhead: ^PlayheadNode, graph: ^AudioGraph) {
     graph->queueSetRoot(playhead.node_id, true)
 }
 
-playheadNodeProcess :: proc(graph: ^AudioGraph, node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+playheadNodeProcess :: proc(graph: ^AudioGraph, node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
     met := cast(^PlayheadNode)node.user_data
     if met == nil {
         return

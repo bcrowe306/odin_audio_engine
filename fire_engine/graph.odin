@@ -1,5 +1,4 @@
-package main
-
+package fire_engine
 import "base:runtime"
 import "core:sync"
 
@@ -16,6 +15,7 @@ AudioNodeProcessProc :: #type proc(
 	engine_context: AudioGraphEngineContext,
 	frame_buffer: ^[]f32,
 	frame_buffer_size: int,
+	midi_messages: []ShortMessage,
 )
 
 ModulationInput :: struct {
@@ -117,7 +117,7 @@ AudioGraph :: struct {
 	markEngineDirty: proc(g: ^AudioGraph),
 
 	beginRenderCycle: proc(g: ^AudioGraph, render_quantum: u64),
-	process: proc(g: ^AudioGraph, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int),
+	process: proc(g: ^AudioGraph, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage),
 
 	getRenderOrder: proc(g: ^AudioGraph) -> []^AudioNode,
 	getNode: proc(g: ^AudioGraph, node_id: u64) -> (^AudioNode, bool),
@@ -335,7 +335,7 @@ audioGraphBeginRenderCycle :: proc(g: ^AudioGraph, render_quantum: u64) {
 	}
 }
 
-audioGraphProcess :: proc(g: ^AudioGraph, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+audioGraphProcess :: proc(g: ^AudioGraph, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	channel_count := int(engine_context.output_channel_count)
 	if channel_count < 1 {
 		channel_count = 1
@@ -374,7 +374,7 @@ audioGraphProcess :: proc(g: ^AudioGraph, engine_context: AudioGraphEngineContex
 		if !ok {
 			continue
 		}
-		graphProcessNodeDFS(g, node, engine_context, frame_buffer, frame_buffer_size)
+		graphProcessNodeDFS(g, node, engine_context, frame_buffer, frame_buffer_size, midi_messages)
 
 		if frame_buffer != nil && len(node.output_cache) > 0 {
 			root_out := node.output_cache[0]
@@ -486,7 +486,7 @@ graphResizeNodeCaches :: proc(g: ^AudioGraph, node: ^AudioNode, sample_count: in
 	}
 }
 
-graphProcessNodeDFS :: proc(g: ^AudioGraph, node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+graphProcessNodeDFS :: proc(g: ^AudioGraph, node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	if node.has_processed_quantum && node.last_render_quantum == engine_context.render_quantum {
 		return
 	}
@@ -501,7 +501,7 @@ graphProcessNodeDFS :: proc(g: ^AudioGraph, node: ^AudioNode, engine_context: Au
 			continue
 		}
 
-		graphProcessNodeDFS(g, upstream, engine_context, frame_buffer, frame_buffer_size)
+		graphProcessNodeDFS(g, upstream, engine_context, frame_buffer, frame_buffer_size, midi_messages)
 	}
 
 	for modulation_input in node.modulation_inputs {
@@ -514,7 +514,7 @@ graphProcessNodeDFS :: proc(g: ^AudioGraph, node: ^AudioNode, engine_context: Au
 			continue
 		}
 
-		graphProcessNodeDFS(g, upstream, engine_context, frame_buffer, frame_buffer_size)
+		graphProcessNodeDFS(g, upstream, engine_context, frame_buffer, frame_buffer_size, midi_messages)
 	}
 
 	mixed_input := audioGraphEnsureMixedInputBuffer(g, node, frame_buffer_size*int(engine_context.output_channel_count))
@@ -593,7 +593,7 @@ graphProcessNodeDFS :: proc(g: ^AudioGraph, node: ^AudioNode, engine_context: Au
 	}
 
 	if node.process != nil {
-		node.process(g, node, engine_context, &mixed_input, frame_buffer_size)
+		node.process(g, node, engine_context, &mixed_input, frame_buffer_size, midi_messages)
 	}
 
 	node.last_render_quantum = engine_context.render_quantum
@@ -879,7 +879,7 @@ graphSetRootImmediate :: proc(g: ^AudioGraph, node_id: u64, enabled: bool) {
 	}
 }
 
-graphEndpointProcess :: proc(graph: ^AudioGraph, node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+graphEndpointProcess :: proc(graph: ^AudioGraph, node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	channel_count := int(engine_context.output_channel_count)
 	if channel_count < 1 {
 		channel_count = 1

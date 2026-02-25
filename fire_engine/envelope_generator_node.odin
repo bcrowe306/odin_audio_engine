@@ -1,6 +1,6 @@
-package main
-
+package fire_engine
 import "core:math"
+
 
 ENVELOPE_MIN_ATTACK_SECONDS :: f32(0.0)
 ENVELOPE_MAX_ATTACK_SECONDS :: f32(20.0)
@@ -168,7 +168,7 @@ envelopeGeneratorNodeGetValue :: proc(node: ^EnvelopeGeneratorNode) -> f32 {
 	return node.current_value
 }
 
-envelopeGeneratorNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int) {
+envelopeGeneratorNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_context: AudioGraphEngineContext, frame_buffer: ^[]f32, frame_buffer_size: int, midi_messages: []ShortMessage) {
 	node := cast(^EnvelopeGeneratorNode)graph_node.user_data
 	if node == nil {
 		return
