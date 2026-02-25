@@ -9,6 +9,10 @@ import vggl "vendor:nanovg/gl"
 import fmt "core:fmt"
 import clay "clay-odin"
 
+// TODO: Build out layer system from UI. process input and drawing through layers. 
+// Each layer can have its own state and can be added/removed dynamically. 
+// This will allow for more complex UI structures and better separation of concerns.
+
 App :: struct {
     title: string,
     window: ^sdl.Window,

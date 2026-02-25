@@ -4,6 +4,8 @@ FireEngine :: struct {
     audio_engine: ^AudioEngine,
     midi_engine: ^MidiEngine,
     resource_manager: ^ResourceManager,
+    command_controller: ^CommandController,
+    tracks: Tracks,
 
     // Methods
     init: proc(fe: ^FireEngine),
@@ -15,6 +17,7 @@ FireEngine :: struct {
 createFireEngine :: proc() -> ^FireEngine {
     fe := new(FireEngine)
     fe.resource_manager = createResourceManager()
+    fe.command_controller = createController()
     fe.audio_engine = createEngine(auto_start = false)
     fe.audio_engine.resource_manager = fe.resource_manager
     fe.midi_engine = createMidiEngine()
@@ -23,6 +26,8 @@ createFireEngine :: proc() -> ^FireEngine {
     fe.start = FireEngine_Start
     fe.stop = FireEngine_Stop
     fe.uninit = FireEngine_Uninit
+    fe.tracks = createTracks(fe)
+    
     return fe
 }
 

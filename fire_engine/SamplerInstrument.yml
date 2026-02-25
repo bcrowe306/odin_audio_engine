@@ -1,0 +1,48 @@
+SamplerInstrument:
+  SampleFile: string
+  Voice:
+    sample_buffer:
+    pitch: f32
+    unison: int
+    unison_detune: f32
+    max_unison: int
+    eg_amp: node
+    eg_filter: node
+    eg_pitch: node
+    filter: node
+    amp: node
+    lfo_pitch: node
+    lfo_filter: node
+    lfo_amp: node
+  VoiceAllocator:
+    voices: "array of Voice"
+
+  Start: int
+  End: int
+  Loop: bool
+  Fade: f32
+  Volume: f32
+  Pan: f32
+  Transpose: int
+  Detune: f32
+  GlideTime: f32
+  Polyphony: int
+  AmpFilter:
+    cutoff: f32
+    resonance: f32
+    morph: f32
+  EnvGen:
+    attack: f32
+    decay: f32
+    sustain: f32
+    release: f32
+  LFO:
+    rate: f32
+    depth: f32
+    waveform: int
+    volume_target: f32
+    filter_target: f32
+    pitch_target: f32
+    pan_target: f32
+
+
