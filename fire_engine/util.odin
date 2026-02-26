@@ -39,7 +39,7 @@ timeSecToNormal :: proc(time_sec: f32, min_time: f32 = 0.0, max_time: f32 = 20.0
 normalToTimeSec :: proc(normalized_value: f32, min_time: f32 = 0.0, max_time: f32 = 20.0) -> f32 {
     return normalToLog_f32(normalized_value, min_time, max_time)
 }
-normalize :: proc(value: $T, min: T, max: T) -> f32 {
+normalize :: proc(value: $T, min: T, max: T) -> T {
     return (value - min) / (max - min)
 }
 normalize_f32 :: proc(value: f32, min: f32, max: f32) -> f32 {
