@@ -22,6 +22,9 @@ normalToFrequency :: proc(normalized_value: f32, min: f32 = 20.0, max: f32 = 200
     return normalToLog_f32(normalized_value, min, max)
 }
 
+midiToNormal :: proc(midi_value: u8) -> f32 {
+    return f32(midi_value) / 127.0
+}
 
 timeMsToNormal :: proc(time_ms: f32, min_time: f32 = 0.0, max_time: f32 = 10000.0) -> f32 {
     return logToNormal_f32(time_ms, min_time, max_time)
@@ -80,4 +83,30 @@ linearToDB_f32 :: proc(linearValue: f32) -> f32 {
         return -100.0
     }
     return 20.0 * math.log(linearValue, 10.0)
+}
+
+midiNoteToFrequency :: proc(midi_note: $T) -> T {
+    
+	return MIDI_FREQ_A4 * math.pow(2.0, (midi_note-MIDI_NOTE_A4)/12.0)
+}
+
+rateFromBaseNote :: proc(base_note: i32, target_note: i32) -> f32 {
+    return math.pow_f32(2.0, (f32(target_note) - f32(base_note)) / 12.0)
+}
+
+detuneRateByCents :: proc(rate: f32, cents: f32) -> f32 {
+    return rate * math.pow_f32(2.0, cents / 1200.0)
+}
+
+applyBasicPanning :: proc(sample: ^[2]f32, pan: f32) {
+    t := (pan + 1.0) * 0.5
+    left_gain := math.cos(f64(t) * math.PI / 2.0)
+    right_gain := math.sin(f64(t) * math.PI / 2.0)
+    sample[0] *= auto_cast left_gain
+    sample[1] *= auto_cast right_gain
+}
+
+applyBasicGain :: proc(sample: ^[2]f32, gain: f32) {
+    sample[0] *= auto_cast gain
+    sample[1] *= auto_cast gain
 }
