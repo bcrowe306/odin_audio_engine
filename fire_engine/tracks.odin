@@ -40,7 +40,7 @@ createTracks :: proc(fe: ^FireEngine) -> Tracks {
         t := createTrack(fe, fmt.tprintf("Track %d", i + 1))
         tracks->addTrack(t)
     }
-    tracks->selectTrackByIndex(0)
+    tracks->selectTrackByIndex(1)
 
     return tracks
 }

@@ -27,6 +27,7 @@ AudioEngine :: struct {
     sample_rate: u32,
     buffer_size: u32,
     channels: u32,
+    use_multithreaded_graph: bool,
     audio_graph: ^AudioGraph,
     playhead: ^PlayheadNode,
     resource_manager: ^ResourceManager,
@@ -55,6 +56,7 @@ AudioEngine :: struct {
     releaseWave: proc(ae: ^AudioEngine, path: string) -> bool,
     getWaveAudio: proc(ae: ^AudioEngine, path: string) -> (^WaveAudio, bool),
     getWaveStatus: proc(ae: ^AudioEngine, path: string) -> ResourceLoadStatus,
+    setMultithreadedGraph: proc(ae: ^AudioEngine, enabled: bool),
 
 }
 
@@ -66,6 +68,7 @@ createEngine :: proc(sample_rate: u32 = 48000, channels: u32 = 2, format: ma.for
     ae.channels = channels
     ae.format = format
     ae.buffer_size = buffer_size
+    ae.use_multithreaded_graph = true
     ae.midi_message_queue = SPSC(MIDI_MESSAGE_QUEUE_SIZE, ShortMessage){}
 
     // Methods
@@ -82,6 +85,7 @@ createEngine :: proc(sample_rate: u32 = 48000, channels: u32 = 2, format: ma.for
     ae.releaseWave = audioEngineReleaseWave
     ae.getWaveAudio = audioEngineGetWaveAudio
     ae.getWaveStatus = audioEngineGetWaveStatus
+    ae.setMultithreadedGraph = audioEngineSetMultithreadedGraph
     audioEngineCreateAudioGraph(ae)
     return ae
 }
@@ -243,15 +247,35 @@ audioEngineGetNodeGraph :: proc(ae: ^AudioEngine) -> ^ma.node_graph {
 }
 
 audioEngineCreateAudioGraph :: proc(ae: ^AudioEngine) {
-    ae.audio_graph = createAudioGraph()
+    if ae.audio_graph != nil {
+        ae.audio_graph->uninit()
+        ae.audio_graph = nil
+    }
 
-    // Ensure a default playhead exists and is attached to the currently attached graph.
-    ae.playhead = createPlayhead()
+    if ae.use_multithreaded_graph {
+        ae.audio_graph = createThreadAudioGraph()
+    } else {
+        ae.audio_graph = createAudioGraph()
+    }
+
+    // Ensure a default playhead exists and is attached to the currently selected graph.
+    if ae.playhead == nil {
+        ae.playhead = createPlayhead()
+    }
     ae.playhead.sample_rate = f64(ae.sample_rate)
     ae.playhead->calculateSamplesPerTick()
     ae.playhead->attachToGraph(ae.audio_graph)
 
     ae.audio_graph->markEngineDirty()
+}
+
+audioEngineSetMultithreadedGraph :: proc(ae: ^AudioEngine, enabled: bool) {
+    if ae.use_multithreaded_graph == enabled {
+        return
+    }
+
+    ae.use_multithreaded_graph = enabled
+    audioEngineCreateAudioGraph(ae)
 }
 
 audioEngineGetPlayhead :: proc(ae: ^AudioEngine) -> ^PlayheadNode {

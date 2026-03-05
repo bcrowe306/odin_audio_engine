@@ -34,7 +34,7 @@ main :: proc() {
         fmt.println("Failed to load wave file:", err)
         return
     }
-    voice = fe.createVoice(&data, false) // Create a voice with the loaded audio data and set it to loop
+    voice = fe.createVoice(48000, &data, false) // Create a voice with the loaded audio data and set it to loop
     sample.sample_data = data
     sample.cursor = 0.0
 
@@ -47,10 +47,9 @@ main :: proc() {
     device_config.pUserData = voice // You can set this to point to your audio engine or state if needed
     qm := fe.createQuickMidi(proc(msg: fe.MidiMsg, user_data: rawptr) {
         if (msg.status & 0xF0) == 0x90 && (msg.data2 > 0) { // Note On message with velocity > 0
-            voice->setNote(msg.data1, msg.data2) // Set the note and velocity for the voice
-            voice->setState(.NoteOn)
+            voice->noteOn(msg.data1, msg.data2)
         } else if ((msg.status & 0xF0) == 0x80) || ((msg.status & 0xF0) == 0x90 && (msg.data2 == 0)) { // Note Off message or Note On with velocity 0
-            voice->setState(.NoteOff)
+            voice->noteOff()
         }
         else{
             fmt.println("Received MIDI message: status=", msg.status, " data1=", msg.data1, " data2=", msg.data2)

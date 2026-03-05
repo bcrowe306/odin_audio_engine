@@ -36,17 +36,30 @@ levelsNodeReset :: proc(node: ^LevelsNode) {
     }
 }
 
-levelsNodeEnsureCapacity :: proc(node: ^LevelsNode, channel_count: int) {
+levelsNodeEnsureCapacity :: proc(node: ^LevelsNode, channel_count: int, allocator := context.allocator) {
     cc := channel_count
     if cc < 1 {
         cc = 1
     }
 
     if len(node.peak_linear) != cc {
-        node.peak_linear = make([]f32, cc)
-        node.rms_linear = make([]f32, cc)
-        node.peak_db = make([]f32, cc)
-        node.rms_db = make([]f32, cc)
+        if len(node.peak_linear) > 0 {
+            delete(node.peak_linear, allocator)
+        }
+        if len(node.rms_linear) > 0 {
+            delete(node.rms_linear, allocator)
+        }
+        if len(node.peak_db) > 0 {
+            delete(node.peak_db, allocator)
+        }
+        if len(node.rms_db) > 0 {
+            delete(node.rms_db, allocator)
+        }
+
+        node.peak_linear = make([]f32, cc, allocator)
+        node.rms_linear = make([]f32, cc, allocator)
+        node.peak_db = make([]f32, cc, allocator)
+        node.rms_db = make([]f32, cc, allocator)
         levelsNodeReset(node)
     } else {
         levelsNodeReset(node)
@@ -64,7 +77,7 @@ levelsNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_con
         channel_count = 1
     }
 
-    levelsNodeEnsureCapacity(node, channel_count)
+    levelsNodeEnsureCapacity(node, channel_count, graph.allocator)
 
     sample_count := frame_buffer_size * channel_count
     out := graph->ensureOutputBuffer(graph_node, 0, sample_count)

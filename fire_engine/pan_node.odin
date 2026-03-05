@@ -1,10 +1,12 @@
 package fire_engine
-import "core:math"
+import ow "./odinworks"
 
 
 PanNode :: struct {
 	node_id: u64,
 	pan: f32,
+	pan_coefs: ow.ow_pan_coeffs,
+	coeff_sample_rate: u32,
 
 	attachToGraph: proc(node: ^PanNode, graph: ^AudioGraph),
 	setPan: proc(node: ^PanNode, pan: f32),
@@ -14,6 +16,11 @@ PanNode :: struct {
 createPanNode :: proc(initial_pan: f32 = 0.0) -> ^PanNode {
 	node := new(PanNode)
 	node.pan = clamp(initial_pan, -1.0, 1.0)
+	node.coeff_sample_rate = 48000
+	ow.ow_pan_init(&node.pan_coefs)
+	ow.ow_pan_set_sample_rate(&node.pan_coefs, f32(node.coeff_sample_rate))
+	ow.ow_pan_set_pan(&node.pan_coefs, node.pan)
+	ow.ow_pan_reset_coeffs(&node.pan_coefs)
 
 	node.attachToGraph = panNodeAttachToGraph
 	node.setPan = panNodeSetPan
@@ -28,6 +35,7 @@ panNodeAttachToGraph :: proc(node: ^PanNode, graph: ^AudioGraph) {
 
 panNodeSetPan :: proc(node: ^PanNode, pan: f32) {
 	node.pan = clamp(pan, -1.0, 1.0)
+	ow.ow_pan_set_pan(&node.pan_coefs, node.pan)
 }
 
 panNodeGetPan :: proc(node: ^PanNode) -> f32 {
@@ -59,18 +67,29 @@ panNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_contex
 		return
 	}
 
-	t := (node.pan + 1.0) * 0.5
-	left_gain := f32(math.cos(f64(t) * math.PI / 2.0))
-	right_gain := f32(math.sin(f64(t) * math.PI / 2.0))
+	sample_rate := engine_context.sample_rate
+	if sample_rate < 1 {
+		sample_rate = 48000
+	}
+	if node.coeff_sample_rate != sample_rate {
+		node.coeff_sample_rate = sample_rate
+		ow.ow_pan_set_sample_rate(&node.pan_coefs, f32(sample_rate))
+		ow.ow_pan_reset_coeffs(&node.pan_coefs)
+	}
+	ow.ow_pan_set_pan(&node.pan_coefs, node.pan)
+	ow.ow_pan_update_coeffs_ctrl(&node.pan_coefs)
 
 	in_len := len(frame_buffer^)
 
 	if channel_count == 1 {
-		mono_gain := 0.5 * (left_gain + right_gain)
 		for frame_index in 0..<frame_buffer_size {
 			if frame_index >= in_len {
 				break
 			}
+			ow.ow_pan_update_coeffs_audio(&node.pan_coefs)
+			left_gain := ow.ow_gain_get_gain_cur(&node.pan_coefs.l_coeffs)
+			right_gain := ow.ow_gain_get_gain_cur(&node.pan_coefs.r_coeffs)
+			mono_gain := 0.5 * (left_gain + right_gain)
 			out[frame_index] = frame_buffer^[frame_index] * mono_gain
 		}
 		return
@@ -88,8 +107,9 @@ panNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_contex
 			right_in = frame_buffer^[base+1]
 		}
 
-		out[base] = left_in * left_gain
-		out[base+1] = right_in * right_gain
+		ow.ow_pan_update_coeffs_audio(&node.pan_coefs)
+		out[base] = ow.ow_gain_process1(&node.pan_coefs.l_coeffs, left_in)
+		out[base+1] = ow.ow_gain_process1(&node.pan_coefs.r_coeffs, right_in)
 
 		for ch in 2..<channel_count {
 			idx := base + ch

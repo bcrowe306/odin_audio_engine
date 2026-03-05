@@ -4,216 +4,23 @@ import "core:fmt"
 import app_framework "app_framework"
 import vg "vendor:nanovg"
 import clay "app_framework/clay-odin"
-import "core:encoding/uuid"
-import "core:crypto"
-
-CommandExecProc:: proc(cmd: ^Command)
-CommandUndoProc:: proc(cmd: ^Command)
-
-CommandController :: struct {
-    undo_stack: [dynamic]^Command,
-    redo_stack: [dynamic]^Command,
-    // commands_map: map[uuid.Identifier]Command,
-    executeCommand: proc(controller: ^CommandController, id: uuid.Identifier, cmd: ^Command),
-    undoCommand: proc(controller: ^CommandController),
-    redoCommand: proc(controller: ^CommandController),
-}
-
-createController :: proc() -> ^CommandController {
-    controller := new(CommandController)
-    controller.executeCommand = executeCommand
-    controller.undoCommand = undoCommand
-    controller.redoCommand = redoCommand
-    return controller
-}
-
-destroyController :: proc(controller: ^CommandController) {
-    clear(&controller.undo_stack)
-    clear(&controller.redo_stack)
-    // clear(&controller.commands_map)
-    free(controller)
-}
-
-executeCommand :: proc(controller: ^CommandController, id: uuid.Identifier, cmd: ^Command) {
-    // TODO: Implement command mapping for debouncing and coalescing of commands.
-    new_cmd := cast(^Command)cmd
-    new_cmd->execute()
-    append(&controller.undo_stack, new_cmd)
-    clear(&controller.redo_stack)
-}
-
-undoCommand :: proc(controller: ^CommandController) {
-    if len(controller.undo_stack) == 0 {
-        return
-    }
-    undo_command_index := len(controller.undo_stack) - 1
-    cmd := controller.undo_stack[undo_command_index]
-    cmd.undo(cmd)
-    append(&controller.redo_stack, cmd)
-    ordered_remove(&controller.undo_stack, undo_command_index)
-}
-
-redoCommand :: proc(controller: ^CommandController) {
-    if len(controller.redo_stack) == 0 {
-        return
-    }
-    redo_command_index := len(controller.redo_stack) - 1  
-    cmd := cast(^Command)controller.redo_stack[redo_command_index]
-    cmd.execute(cmd)
-    append(&controller.undo_stack, cmd)
-    ordered_remove(&controller.redo_stack, redo_command_index)
-}
-
-Command :: struct {
-    id: uuid.Identifier,
-    execute: proc(cmd: ^Command),
-    undo: proc(cmd: ^Command),
-    user_data: rawptr,
-    
-}
-
-FloatCommand :: struct {
-    using command: Command,
-    new_value: f32,
-    previous_value: f32,
-}
-
-createFloatCommand :: proc(id: uuid.Identifier, execute: proc(cmd: ^Command), undo: proc(cmd: ^Command), new_value: f32, previous_value: f32, user_data: rawptr) -> ^FloatCommand {
-    cmd := new(FloatCommand)
-    cmd.id = id
-    cmd.execute = execute
-    cmd.undo = undo
-    cmd.new_value = new_value
-    cmd.previous_value = previous_value
-    cmd.user_data = user_data
-    return cmd
-}
-
-Parameter :: struct {
-    id: uuid.Identifier,
-    controller: ^CommandController,
-    name: string,
-    listeners: [dynamic]proc(new_value: any), // TODO: will be signals instead of listeners.
-    set: proc(param: ^Parameter, new_value: any),
-    get: proc(param: ^Parameter) -> any,
-
-    addListener: proc(param: ^Parameter, listener: proc(new_value: any)),
-    removeListener: proc(param: ^Parameter, listener: proc(new_value: any)),
-
-}
-
-addListener :: proc(param: ^Parameter, listener: proc(new_value: any)) {
-    append(&param.listeners, listener)
-}
-
-removeListener :: proc(param: ^Parameter, listener: proc(new_value: any)) {
-    for existing_listener, index in param.listeners {
-        if existing_listener == listener {
-            ordered_remove(&param.listeners, index)
-            break
-        }
-    }
-}
-
-
-configureParameter :: proc(parameter: ^Parameter)  {
-    context.random_generator = crypto.random_generator()
-    parameter.id = uuid.generate_v4()
-    parameter.addListener = addListener
-    parameter.removeListener = removeListener
-}
-
-
-FloatParameter :: struct {
-    using parameter: Parameter,
-    value : f32,
-    default_value: f32,
-    min_value: f32,
-    max_value: f32,
-}
-
-
-
-createFloatParameter :: proc(controller: ^CommandController, name: string, default_value: f32, min_value: f32, max_value: f32) -> ^FloatParameter {
-    param := new(FloatParameter)
-    configureParameter(param)
-    param.controller = controller
-    param.value = default_value
-    param.default_value = default_value
-    param.name = name
-    param.min_value = min_value
-    param.max_value = max_value
-
-    return param
-
-}
-
-executeFloatParameterChange :: proc(cmd_ptr: ^Command) {
-    cmd := cast(^FloatCommand)cmd_ptr
-    param := cast(^FloatParameter)cmd.user_data
-    if param == nil {
-        return
-    }
-    
-    param.value = cmd.new_value
-    for listener in param.listeners {
-        listener(cmd.new_value)
-    }
-}
-
-undoFloatParameterChange :: proc(cmd_ptr: ^Command) {
-    cmd := cast(^FloatCommand)cmd_ptr
-    param := cast(^FloatParameter)cmd.user_data
-    if param == nil {
-        return
-    }
-    // print command new and previous values for debugging
-    fmt.printfln("Undoing command: %s, Parameter: %s", cmd.id, param.name)
-    fmt.printfln("Cmd values New_value: %f, Previous_value: %f", cmd.new_value, cmd.previous_value)
-    param.value = cmd.new_value
-        fmt.printfln("From: %f, To: %f", param.value, cmd.previous_value)
-
-    for listener in param.listeners {
-        listener(cmd.previous_value)
-    }
-}
-
-setFloatParameterValue :: proc(param: ^FloatParameter, new_value: f32) {
-    val := clamp(new_value, param.min_value, param.max_value)
-    if val != param.value {
-        new_cmd := createFloatCommand(
-            id = param.id, 
-            execute = executeFloatParameterChange, 
-            undo = undoFloatParameterChange, 
-            new_value = val, 
-            previous_value = param.value, 
-            user_data = cast(rawptr)param)
-
-        param.controller->executeCommand(param.id, new_cmd)
-    }
-}
-
-
+import fe "fire_engine"
 
 main :: proc() {
     using fmt
-    // Write to json file
-    EncodeTest("output.json")
+    using fe
 
-    controller := createController()
-    defer destroyController(controller)
+    // Fire Engine initialization and startup
+    fe := createFireEngine()
+	fe.midi_engine.debug = true
+	fe->init()
+	fe->start()
+	defer fe->uninit()
 
-    volume_param := createFloatParameter(controller, "Volume", 0.5, 0.0, 1.0)
-    volume_param->addListener(proc(new_value: any) {
-        fmt.printfln("Volume changed to: %f", new_value.(f32))
-    })
-    setFloatParameterValue(volume_param, 0.8)
-    setFloatParameterValue(volume_param, 0.3)
-    controller->undoCommand()
-    
-    
-
-
+    // Create the application framework
+    app := app_framework.App_Create("Odin Audio Engine", 1080, 288, 60.0)
+    app_framework.App_Init(app)
+    app.user_data = fe
 
     // Create the application UI
     ui := app_framework.createUI(vg.Color{0, 0, 0, 255})
@@ -229,7 +36,7 @@ main :: proc() {
         vg.FontSize(ctx, 18.0)
         vg.FontFace(ctx, "opensans")
         vg.FillColor(ctx, vg.RGBA(255, 255, 255, 255))
-        vg.Text(ctx, el.bounds.x + 10, el.bounds.y + 30, "Main Page")
+        vg.Text(ctx, el.bounds.x + 10, el.bounds.y + 30, "Second Page")
     }
     app_framework.signalConnect(button_2.onPressed, proc(value: any, data: rawptr) {
         ui := cast(^app_framework.UI)data
@@ -238,6 +45,7 @@ main :: proc() {
      }, ui )
      
     button_el.onDraw = proc(el: ^app_framework.Element, ctx: ^vg.Context, user_data: rawptr) {
+        fe := cast(^fe.FireEngine)user_data
         vg.BeginPath(ctx)
         vg.Rect(ctx, el.bounds.x, el.bounds.y, el.bounds.width, el.bounds.height)
         vg.FillColor(ctx, vg.RGBA(0, 128, 255, 255))
@@ -245,7 +53,7 @@ main :: proc() {
         vg.FontSize(ctx, 18.0)
         vg.FontFace(ctx, "opensans")
         vg.FillColor(ctx, vg.RGBA(255, 255, 255, 255))
-        vg.Text(ctx, el.bounds.x + 10, el.bounds.y + 30, "Second Page")
+        vg.Text(ctx, el.bounds.x + 10, el.bounds.y + 30, fmt.tprintf("Selected Track: %d", fe.tracks.selected_track_index + 1))
     }
 
     
@@ -303,9 +111,8 @@ main :: proc() {
     fmt.printfln("Starting application ui")
     ui.router->push("main")
 
-    app := app_framework.App_Create("Odin Audio Engine", 1080, 288, 60.0)
-    app_framework.App_Init(app)
-
+    
+    // Tie the ui to the application and run the main loop
     app.ui = ui
     app.run(app)
     app_framework.App_Uninit(app)

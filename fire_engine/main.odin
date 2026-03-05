@@ -10,65 +10,36 @@ BeatTriggerData :: struct {
 main :: proc() {
 	fe := createFireEngine()
 	fe.midi_engine.debug = true
+	fe.audio_engine->setMultithreadedGraph(false)
 	fe->init()
 	fe->start()
 	defer fe->uninit()
 
-	sample_node := createAudioSampleNode(fe.audio_engine, "perc.wav", true, false)
+
+	sample_node := createAudioSampleNode(fe.audio_engine, "prec.wav", true, false)
 	defer sample_node->releaseResource()
 	sample_node->setRateFromMidiNote(60)
 	sample_node->attachToGraph(fe.audio_engine.audio_graph)
-	filter_node := createFilterNode(
-		filter_type = .Highpass,
-		cutoff_frequency_hz = 1200,
-		resonance_q = 0.8,
-		morph_parameter = 0.5,
-		slope = .Db12,
-	)
-	filter_node->attachToGraph(fe.audio_engine.audio_graph)
-
-	gain_node := createGainNode(initial_gain = 1)
-	gain_node->attachToGraph(fe.audio_engine.audio_graph)
-	lfo_node := createLFONode(
-		wavetable_name = "sine",
-		rate_mode = .Hz,
-		rate_hz = 0.1,
-		rate_beat_time = .N1_4,
-		depth = 1,
-		bias = 0.0,
-		enabled = true,
-		attack_time_seconds = 0,
-		offset_normalized = 0.0,
-		tempo_bpm = 120,
-	)
-	lfo_node->attachToGraph(fe.audio_engine.audio_graph)
-	_ = fe.audio_engine.audio_graph->connectModulationInput(gain_node.node_id, 0, lfo_node.node_id, 0)
-
-	pan_node := createPanNode(initial_pan = 0.0)
-	pan_node->attachToGraph(fe.audio_engine.audio_graph)
-	fe.audio_engine.audio_graph->queueConnect(sample_node.node_id, 0, filter_node.node_id, 0)
-	fe.audio_engine.audio_graph->queueConnect(filter_node.node_id, 0, gain_node.node_id, 0)
-	fe.audio_engine.audio_graph->queueConnect(gain_node.node_id, 0, pan_node.node_id, 0)
-	fe.audio_engine.audio_graph->connectToEndpoint(pan_node.node_id)
+	fe.audio_engine.audio_graph->connectToEndpoint(sample_node.node_id)
 
 	playhead := fe.audio_engine->getPlayhead()
     playhead->setTempo(140)
 	if playhead != nil {
-		beat_trigger := new(BeatTriggerData)
-		beat_trigger.playhead = playhead
-		beat_trigger.sample_node = sample_node
+		// beat_trigger := new(BeatTriggerData)
+		// beat_trigger.playhead = playhead
+		// beat_trigger.sample_node = sample_node
 
-		signalConnect(playhead.onTick, proc(value: any, user_data: rawptr = nil) {
-			trigger := cast(^BeatTriggerData)user_data
-            tick_event := value.(TickEvent)
-			if trigger == nil || trigger.playhead == nil || trigger.sample_node == nil {
-				return
-			}
+		// signalConnect(playhead.onTick, proc(value: any, user_data: rawptr = nil) {
+		// 	trigger := cast(^BeatTriggerData)user_data
+        //     tick_event := value.(TickEvent)
+		// 	if trigger == nil || trigger.playhead == nil || trigger.sample_node == nil {
+		// 		return
+		// 	}
 
-			if trigger.playhead->isBeat() {
-					trigger.sample_node->play(u32(tick_event.frame_offset))
-			}
-		}, cast(rawptr)beat_trigger)
+		// 	if trigger.playhead->isBeat() {
+		// 			trigger.sample_node->play(u32(tick_event.frame_offset))
+		// 	}
+		// }, cast(rawptr)beat_trigger)
 
 		playhead->setState(.Playing)
 	}

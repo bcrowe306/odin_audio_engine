@@ -37,6 +37,7 @@ AudioSampleNode :: struct {
 
 	setReadCursor: proc(node: ^AudioSampleNode, frame: f64),
 	getReadCursor: proc(node: ^AudioSampleNode) -> f64,
+	process: AudioNodeProcessProc,
 }
 // This node is responsible for playing back an audio sample loaded from a file. It supports setting a playback range, looping, and adjusting the playback rate. The node reads audio data from the engine's resource manager and outputs it to the audio graph. It also processes incoming MIDI messages, which can be used for triggering playback or modulating parameters in the future.
 createAudioSampleNode :: proc(engine: ^AudioEngine, path: string, async: bool = true, looping: bool = false) -> ^AudioSampleNode {
@@ -63,6 +64,8 @@ createAudioSampleNode :: proc(engine: ^AudioEngine, path: string, async: bool = 
 	node.setRateFromMidiNote = audioSampleNodeSetRateFromMidiNote
 	node.setReadCursor = audioSampleNodeSetReadCursor
 	node.getReadCursor = audioSampleNodeGetReadCursor
+	node.releaseResource = audioSampleNodeReleaseResource
+	node.process = audioSampleNodeProcess
 
 	if engine != nil {
 		engine->loadWave(path, async)
@@ -150,21 +153,25 @@ audioSampleNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engin
 		channel_count = 1
 	}
 
-    // 
+    // Ensure output buffer is the correct size for the current render block and channel count.
 	sample_count := frame_buffer_size * channel_count
 	out := graph->ensureOutputBuffer(graph_node, 0, sample_count)
 	if len(out) != sample_count {
 		return
 	}
+
+	// Check if the sample is ready before processing.
+	if sample_node.engine->getWaveStatus(sample_node.path) != .Ready {
+		return
+	}
+
     // Clear output buffer before rendering.
 	for i in 0..<sample_count {
 		out[i] = 0
 	}
 
-	if sample_node.engine->getWaveStatus(sample_node.path) != .Ready {
-		return
-	}
-
+	
+	// Get the audio data for the sample. This should be fast since it should already be loaded in memory by the resource manager.
 	audio, ok := sample_node.engine->getWaveAudio(sample_node.path)
 	if !ok || audio == nil || audio.frames <= 0 || len(audio.samples) == 0 {
 		return
@@ -179,7 +186,7 @@ audioSampleNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engin
 	if end_frame <= start_frame {
 		return
 	}
-
+	
 	if !sample_node.playing {
 		return
 	}
@@ -198,7 +205,6 @@ audioSampleNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engin
 			return
         }
     }
-
 	render_offset := int(sample_node.offset_frames)
 	if render_offset < 0 {
 		render_offset = 0

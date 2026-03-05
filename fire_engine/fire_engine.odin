@@ -6,6 +6,7 @@ FireEngine :: struct {
     resource_manager: ^ResourceManager,
     command_controller: ^CommandController,
     tracks: Tracks,
+    metronome: ^Metronome,
 
     // Methods
     init: proc(fe: ^FireEngine),
@@ -22,6 +23,8 @@ createFireEngine :: proc() -> ^FireEngine {
     fe.audio_engine.resource_manager = fe.resource_manager
     fe.midi_engine = createMidiEngine()
     fe.midi_engine.audio_engine_midi_message_queue = &fe.audio_engine.midi_message_queue
+    
+    
     fe.init = FireEngine_Init
     fe.start = FireEngine_Start
     fe.stop = FireEngine_Stop
@@ -52,6 +55,11 @@ FireEngine_Uninit :: proc(fe: ^FireEngine) {
 
 FireEngine_Start :: proc(fe: ^FireEngine) {
     fe.audio_engine->start()
+
+    // Start the metronome
+    fe.metronome = createMetronomeNode(fe)
+    fe.metronome->attachToGraph(fe.audio_engine.audio_graph)
+    fe.audio_engine.audio_graph->connectToEndpoint(fe.metronome.node_id)
 }
 
 FireEngine_Stop :: proc(fe: ^FireEngine) {

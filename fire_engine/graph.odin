@@ -28,7 +28,10 @@ ModulationInput :: struct {
 }
 
 GraphNodeInput :: struct {
-	has_source: bool,
+	sources: [dynamic]GraphNodeInputSource,
+}
+
+GraphNodeInputSource :: struct {
 	source_node_id: u64,
 	source_output_index: int,
 }
@@ -86,6 +89,7 @@ GraphMutation :: struct {
 
 AudioGraph :: struct {
 	allocator: runtime.Allocator,
+	threaded_state: ^ThreadAudioGraphState,
 
 	nodes: map[u64]^AudioNode,
 	endpoint_node_id: u64,
@@ -169,6 +173,10 @@ audioGraphInit :: proc(g: ^AudioGraph) {
 }
 
 audioGraphUninit :: proc(g: ^AudioGraph) {
+	if g.threaded_state != nil {
+		threadAudioGraphStateDestroy(g)
+	}
+
 	sync.mutex_lock(&g.lock)
 	for _, node in g.nodes {
 		graphNodeDestroy(node, g.allocator)
@@ -492,16 +500,14 @@ graphProcessNodeDFS :: proc(g: ^AudioGraph, node: ^AudioNode, engine_context: Au
 	}
 
 	for input in node.inputs {
-		if !input.has_source {
-			continue
-		}
+		for source_connection in input.sources {
+			upstream, ok := audioGraphGetNode(g, source_connection.source_node_id)
+			if !ok {
+				continue
+			}
 
-		upstream, ok := audioGraphGetNode(g, input.source_node_id)
-		if !ok {
-			continue
+			graphProcessNodeDFS(g, upstream, engine_context, frame_buffer, frame_buffer_size, midi_messages)
 		}
-
-		graphProcessNodeDFS(g, upstream, engine_context, frame_buffer, frame_buffer_size, midi_messages)
 	}
 
 	for modulation_input in node.modulation_inputs {
@@ -526,30 +532,28 @@ graphProcessNodeDFS :: proc(g: ^AudioGraph, node: ^AudioNode, engine_context: Au
 	}
 
 	for input in node.inputs {
-		if !input.has_source {
-			continue
-		}
+		for source_connection in input.sources {
+			upstream, ok := audioGraphGetNode(g, source_connection.source_node_id)
+			if !ok {
+				continue
+			}
+			if source_connection.source_output_index < 0 || source_connection.source_output_index >= len(upstream.output_cache) {
+				continue
+			}
 
-		upstream, ok := audioGraphGetNode(g, input.source_node_id)
-		if !ok {
-			continue
-		}
-		if input.source_output_index < 0 || input.source_output_index >= len(upstream.output_cache) {
-			continue
-		}
+			source := upstream.output_cache[source_connection.source_output_index]
+			if len(source) == 0 {
+				continue
+			}
 
-		source := upstream.output_cache[input.source_output_index]
-		if len(source) == 0 {
-			continue
-		}
+			sample_count := len(mixed_input)
+			if len(source) < sample_count {
+				sample_count = len(source)
+			}
 
-		sample_count := len(mixed_input)
-		if len(source) < sample_count {
-			sample_count = len(source)
-		}
-
-		for i in 0..<sample_count {
-			mixed_input[i] += source[i]
+			for i in 0..<sample_count {
+				mixed_input[i] += source[i]
+			}
 		}
 	}
 
@@ -652,14 +656,13 @@ graphRebuildDFS :: proc(g: ^AudioGraph, node: ^AudioNode, visited: ^map[u64]bool
 	visited^[node.id] = true
 
 	for input in node.inputs {
-		if !input.has_source {
-			continue
+		for source_connection in input.sources {
+			upstream, ok := g.nodes[source_connection.source_node_id]
+			if !ok {
+				continue
+			}
+			graphRebuildDFS(g, upstream, visited)
 		}
-		upstream, ok := g.nodes[input.source_node_id]
-		if !ok {
-			continue
-		}
-		graphRebuildDFS(g, upstream, visited)
 	}
 
 	for modulation_input in node.modulation_inputs {
@@ -683,6 +686,9 @@ graphNodeCreate :: proc(node_id: u64, name: string, input_count: int, output_cou
 	node.process = process
 	node.user_data = user_data
 	node.inputs = make([dynamic]GraphNodeInput, input_count, input_count, allocator)
+	for i in 0..<len(node.inputs) {
+		node.inputs[i].sources = make([dynamic]GraphNodeInputSource, 0, 0, allocator)
+	}
 	node.modulation_inputs = make([dynamic]ModulationInput, modulation_input_count, modulation_input_count, allocator)
 	node.outputs = make([dynamic]GraphNodeOutput, output_count, output_count, allocator)
 	node.output_cache = make([dynamic][]f32, output_count, output_count, allocator)
@@ -708,6 +714,12 @@ graphNodeDestroy :: proc(node: ^AudioNode, allocator := context.allocator) {
 	for i in 0..<len(node.modulation_inputs) {
 		if len(node.modulation_inputs[i].buffer) > 0 {
 			delete(node.modulation_inputs[i].buffer, allocator)
+		}
+	}
+
+	for i in 0..<len(node.inputs) {
+		if len(node.inputs[i].sources) > 0 {
+			delete(node.inputs[i].sources)
 		}
 	}
 
@@ -745,7 +757,29 @@ graphRemoveNodeImmediate :: proc(g: ^AudioGraph, node_id: u64) {
 	for output_index in 0..<len(node.outputs) {
 		targets := node.outputs[output_index].targets
 		for target in targets {
-			graphDisconnectInputImmediate(g, target.target_node_id, target.target_input_index)
+			target_node, target_ok := g.nodes[target.target_node_id]
+			if !target_ok || target.target_input_index < 0 {
+				continue
+			}
+
+			audio_input_count := len(target_node.inputs)
+			modulation_input_count := len(target_node.modulation_inputs)
+			if target.target_input_index < audio_input_count {
+				input := &target_node.inputs[target.target_input_index]
+				graphRemoveAudioInputSource(input, node_id, output_index)
+			} else {
+				modulation_input_index := target.target_input_index - audio_input_count
+				if modulation_input_index < 0 || modulation_input_index >= modulation_input_count {
+					continue
+				}
+
+				modulation_input := &target_node.modulation_inputs[modulation_input_index]
+				if modulation_input.has_source && modulation_input.source_node_id == node_id && modulation_input.source_output_index == output_index {
+					modulation_input.has_source = false
+					modulation_input.source_node_id = 0
+					modulation_input.source_output_index = 0
+				}
+			}
 		}
 		clear(&node.outputs[output_index].targets)
 	}
@@ -753,6 +787,33 @@ graphRemoveNodeImmediate :: proc(g: ^AudioGraph, node_id: u64) {
 	delete_key(&g.nodes, node_id)
 	graphSetRootImmediate(g, node_id, false)
 	graphNodeDestroy(node, g.allocator)
+}
+
+graphRemoveAudioInputSource :: proc(input: ^GraphNodeInput, source_node_id: u64, source_output_index: int) -> bool {
+	for i in 0..<len(input.sources) {
+		source_connection := input.sources[i]
+		if source_connection.source_node_id == source_node_id && source_connection.source_output_index == source_output_index {
+			unordered_remove(&input.sources, i)
+			return true
+		}
+	}
+
+	return false
+}
+
+graphRemoveOutputTargetReference :: proc(source_node: ^AudioNode, source_output_index: int, target_node_id: u64, target_input_index: int) {
+	if source_node == nil || source_output_index < 0 || source_output_index >= len(source_node.outputs) {
+		return
+	}
+
+	targets := &source_node.outputs[source_output_index].targets
+	for i in 0..<len(targets^) {
+		t := targets^[i]
+		if t.target_node_id == target_node_id && t.target_input_index == target_input_index {
+			unordered_remove(targets, i)
+			return
+		}
+	}
 }
 
 graphConnectImmediate :: proc(g: ^AudioGraph, source_node_id: u64, source_output_index: int, target_node_id: u64, target_input_index: int) {
@@ -778,19 +839,29 @@ graphConnectImmediate :: proc(g: ^AudioGraph, source_node_id: u64, source_output
 		return
 	}
 
-	// Target inputs are single-source. Disconnect any existing source first.
-	graphDisconnectInputImmediate(g, target_node_id, target_input_index)
-
 	if is_audio_input {
-		target_node.inputs[target_input_index] = GraphNodeInput{
-			has_source = true,
+		input := &target_node.inputs[target_input_index]
+		for source_connection in input.sources {
+			if source_connection.source_node_id == source_node_id && source_connection.source_output_index == source_output_index {
+				return
+			}
+		}
+
+		append(&input.sources, GraphNodeInputSource{
 			source_node_id = source_node_id,
 			source_output_index = source_output_index,
-		}
+		})
 	} else {
-		target_node.modulation_inputs[modulation_input_index].has_source = true
-		target_node.modulation_inputs[modulation_input_index].source_node_id = source_node_id
-		target_node.modulation_inputs[modulation_input_index].source_output_index = source_output_index
+		modulation_input := &target_node.modulation_inputs[modulation_input_index]
+		if modulation_input.has_source && modulation_input.source_node_id == source_node_id && modulation_input.source_output_index == source_output_index {
+			return
+		}
+
+		// Modulation inputs remain single-source for deterministic control routing.
+		graphDisconnectInputImmediate(g, target_node_id, target_input_index)
+		modulation_input.has_source = true
+		modulation_input.source_node_id = source_node_id
+		modulation_input.source_output_index = source_output_index
 	}
 
 	append(&source_node.outputs[source_output_index].targets, GraphNodeOutputTarget{
@@ -817,14 +888,14 @@ graphDisconnectInputImmediate :: proc(g: ^AudioGraph, target_node_id: u64, targe
 	}
 
 	has_source := false
+	source_connections := [dynamic]GraphNodeInputSource{}
 	source_node_id := u64(0)
 	source_output_index := 0
 
 	if is_audio_input {
-		input := target_node.inputs[target_input_index]
-		has_source = input.has_source
-		source_node_id = input.source_node_id
-		source_output_index = input.source_output_index
+		input := &target_node.inputs[target_input_index]
+		has_source = len(input.sources) > 0
+		source_connections = input.sources
 	} else {
 		input := target_node.modulation_inputs[modulation_input_index]
 		has_source = input.has_source
@@ -836,21 +907,20 @@ graphDisconnectInputImmediate :: proc(g: ^AudioGraph, target_node_id: u64, targe
 		return
 	}
 
-	source_node, source_ok := g.nodes[source_node_id]
-	if source_ok && source_output_index >= 0 && source_output_index < len(source_node.outputs) {
-		targets := &source_node.outputs[source_output_index].targets
-		for i in 0..<len(targets^) {
-			t := targets^[i]
-			if t.target_node_id == target_node_id && t.target_input_index == target_input_index {
-				unordered_remove(targets, i)
-				break
+	if is_audio_input {
+		for source_connection in source_connections {
+			source_node, source_ok := g.nodes[source_connection.source_node_id]
+			if source_ok {
+				graphRemoveOutputTargetReference(source_node, source_connection.source_output_index, target_node_id, target_input_index)
 			}
 		}
-	}
-
-	if is_audio_input {
-		target_node.inputs[target_input_index] = GraphNodeInput{}
+		clear(&target_node.inputs[target_input_index].sources)
 	} else {
+		source_node, source_ok := g.nodes[source_node_id]
+		if source_ok {
+			graphRemoveOutputTargetReference(source_node, source_output_index, target_node_id, target_input_index)
+		}
+
 		target_node.modulation_inputs[modulation_input_index].has_source = false
 		target_node.modulation_inputs[modulation_input_index].source_node_id = 0
 		target_node.modulation_inputs[modulation_input_index].source_output_index = 0

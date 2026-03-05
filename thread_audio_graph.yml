@@ -1,0 +1,8 @@
+AudioGraphMultithreadedRequirements:
+  - Thread pool created based on number of CPU cores available, with a maximum limit to prevent excessive thread creation.
+  - A task queue system to manage audio processing tasks, audio node processing tasks put on queue.
+  - Audio nodes input processing could be multithreaded. This could work with the topological sort of the audio graph to determine which nodes can be processed in parallel.
+  - A thread pops tasks from the queue and processes them, ensuring that dependencies between audio nodes are respected.
+  - Graph api should remain the same. A different file should be created for the multithreaded audio graph implementation, and the main audio graph file should be updated to use the multithreaded version. This way, we can keep the single-threaded implementation for testing and comparison purposes.
+  - Locks and mutexes should be avoided due to audio-thread requirements.
+  - Read the "threads_example.odin" file for reference on how to implement a thread pool and task queue system in Odin.

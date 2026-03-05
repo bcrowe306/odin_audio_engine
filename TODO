@@ -1,0 +1,2 @@
+TODO: Resolve asset loading path for final application
+TODO: Create a way to load audio from binary. This way we can package necessary audio files into binary.

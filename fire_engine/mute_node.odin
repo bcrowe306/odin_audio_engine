@@ -1,4 +1,6 @@
 package fire_engine
+import ow "./odinworks"
+
 DEFAULT_MUTE_NODE_RAMP_SECONDS :: f32(0.01)
 MIN_MUTE_NODE_RAMP_SECONDS :: f32(0.0001)
 
@@ -8,6 +10,8 @@ MuteNode :: struct {
 	muted: bool,
 	current_gain: f32,
 	ramp_seconds: f32,
+	gain_coefs: ow.ow_gain_coeffs,
+	coeff_sample_rate: u32,
 
 	attachToGraph: proc(node: ^MuteNode, graph: ^AudioGraph),
 	setMuted: proc(node: ^MuteNode, muted: bool),
@@ -24,6 +28,11 @@ createMuteNode :: proc(initial_muted: bool = false, ramp_seconds: f32 = DEFAULT_
 		node.current_gain = 0.0
 	}
 	node.ramp_seconds = max(ramp_seconds, MIN_MUTE_NODE_RAMP_SECONDS)
+	node.coeff_sample_rate = 48000
+	ow.ow_gain_init(&node.gain_coefs)
+	ow.ow_gain_set_sample_rate(&node.gain_coefs, f32(node.coeff_sample_rate))
+	ow.ow_gain_set_smooth_tau(&node.gain_coefs, node.ramp_seconds)
+	ow.ow_gain_set_gain_lin(&node.gain_coefs, node.current_gain)
 
 	node.attachToGraph = muteNodeAttachToGraph
 	node.setMuted = muteNodeSetMuted
@@ -48,6 +57,7 @@ muteNodeIsMuted :: proc(node: ^MuteNode) -> bool {
 
 muteNodeSetRampSeconds :: proc(node: ^MuteNode, ramp_seconds: f32) {
 	node.ramp_seconds = max(ramp_seconds, MIN_MUTE_NODE_RAMP_SECONDS)
+	ow.ow_gain_set_smooth_tau(&node.gain_coefs, node.ramp_seconds)
 }
 
 muteNodeGetRampSeconds :: proc(node: ^MuteNode) -> f32 {
@@ -75,41 +85,31 @@ muteNodeProcess :: proc(graph: ^AudioGraph, graph_node: ^AudioNode, engine_conte
 	if frame_buffer != nil {
 		input_len = len(frame_buffer^)
 	}
-
-	sample_rate := int(engine_context.sample_rate)
-	if sample_rate < 1 {
-		sample_rate = 48000
-	}
-
-	ramp_samples := f32(sample_rate) * node.ramp_seconds
-	if ramp_samples < 1 {
-		ramp_samples = 1
-	}
-	max_step := f32(1.0) / ramp_samples
-
-	gain := node.current_gain
-	target := f32(1.0)
-	if node.muted {
-		target = 0.0
-	}
-
 	for i in 0..<sample_count {
-		diff := target - gain
-		if diff > max_step {
-			gain += max_step
-		} else if diff < -max_step {
-			gain -= max_step
-		} else {
-			gain = target
-		}
-
 		sample := f32(0)
 		if i < input_len {
 			sample = frame_buffer^[i]
 		}
-
-		out[i] = sample * gain
+		out[i] = sample
 	}
 
-	node.current_gain = gain
+	sample_rate := engine_context.sample_rate
+	if sample_rate < 1 {
+		sample_rate = 48000
+	}
+	if node.coeff_sample_rate != sample_rate {
+		node.coeff_sample_rate = sample_rate
+		ow.ow_gain_set_sample_rate(&node.gain_coefs, f32(sample_rate))
+	}
+
+	target := f32(1.0)
+	if node.muted {
+		target = 0.0
+	}
+	ow.ow_gain_set_gain_lin(&node.gain_coefs, target)
+	if sample_count > 0 {
+		ow.ow_gain_process(&node.gain_coefs, &out[0], &out[0], sample_count)
+	}
+
+	node.current_gain = ow.ow_gain_get_gain_cur(&node.gain_coefs)
 }

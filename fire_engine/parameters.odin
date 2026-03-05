@@ -1135,3 +1135,139 @@ encoderBoolParameter :: proc(param_ptr: ^Parameter, multiplier: f32) {
         setBoolParameterValue(param, false)
     }
 }
+
+UIntParameter :: struct {
+    using parameter: Parameter,
+    name: string `json:"name"`,
+    value : u64 `json:"value"`,
+    default_value: u64 `json:"default_value"`,
+    min_value: u64 `json:"min_value"`,
+    max_value: u64 `json:"max_value"`,
+    set: proc(param: ^UIntParameter, new_value: u64),
+    get: proc(param: ^UIntParameter) -> u64,
+    step: u64 `json:"step"`,
+    small_step: u64 `json:"small_step"`,
+}
+
+createUIntParameter :: proc(controller: ^CommandController, name: string, default_value: u64, min_value: u64, max_value: u64) -> ^UIntParameter {
+    param := new(UIntParameter)
+    configureParameter(param)
+    param.controller = controller
+    param.value = default_value
+    param.default_value = default_value
+    param.name = name
+    param.min_value = min_value
+    param.max_value = max_value
+    param.set = setUIntParameterValue
+    param.get = getUIntParameterValue
+    param.step = 1
+    param.small_step = 1
+    param.getUnitValue = getUIntUnitValue
+    param.inc = incUIntParameter
+    param.dec = decUIntParameter
+    param.encoder = encoderUIntParameter
+
+    return param
+}
+
+setUIntParameterValue :: proc(param: ^UIntParameter, new_value: u64) {
+    if param == nil {
+        return
+    }
+    val := clamp(new_value, param.min_value, param.max_value)
+    if val != param.value {
+        new_cmd := createUInt64Command(
+            id = param.id, 
+            execute = executeUIntParameterChange, 
+            undo = undoUIntParameterChange, 
+            new_value = val, 
+            previous_value = param.value, 
+            user_data = cast(rawptr)param)
+
+        param.controller->executeCommand(param.id, new_cmd)
+    }
+}
+
+getUIntParameterValue :: proc(param: ^UIntParameter) -> u64 {
+    if param == nil {
+        return 0
+    }
+    return param.value
+}
+
+getUIntUnitValue :: proc(param_ptr: ^Parameter) -> f32 {
+    param := cast(^UIntParameter)param_ptr
+    if param == nil {
+        return 0
+    }
+    range := param.max_value - param.min_value
+    if range <= 0 {
+        return 0
+    }
+    return clamp(f32(param.value - param.min_value) / f32(range), 0.0, 1.0)
+}
+
+executeUIntParameterChange :: proc(cmd_ptr: ^Command) {
+    cmd := cast(^UInt64Command)cmd_ptr
+    param := cast(^UIntParameter)cmd.user_data
+    if param == nil {
+        return
+    }
+    
+    param.value = cmd.new_value
+    signalEmit(param.onChange, param.value)
+}
+
+undoUIntParameterChange :: proc(cmd_ptr: ^Command) {
+    cmd := cast(^UInt64Command)cmd_ptr
+    param := cast(^UIntParameter)cmd.user_data
+    if param == nil {
+        return
+    }
+    // print command new and previous values for debugging
+    param.value = cmd.new_value
+    signalEmit(param.onChange, param.value)
+}
+
+incUIntParameter :: proc(param_ptr: ^Parameter, multiplier: f32) {
+    param := cast(^UIntParameter)param_ptr
+    if param == nil {
+        return
+    }
+    step := u64(f32(param.step) * multiplier)
+    if step < param.step {
+        step = param.step
+    }
+    setUIntParameterValue(param, param.value + step)
+}
+
+decUIntParameter :: proc(param_ptr: ^Parameter, multiplier: f32) {
+    param := cast(^UIntParameter)param_ptr
+    if param == nil {
+        return
+    }
+    step := u64(f32(param.step) * multiplier)
+    if step < param.step {
+        step = param.step
+    }
+    setUIntParameterValue(param, param.value - step)
+}
+
+encoderUIntParameter :: proc(param_ptr: ^Parameter, multiplier: f32) {
+    param := cast(^UIntParameter)param_ptr
+    if param == nil {
+        return
+    }
+    step := u64(f32(param.step) * multiplier)
+    if step == 0 {
+        if multiplier > 0 {
+            step = param.step
+        } else if multiplier < 0 {
+            step = -param.step
+        } else {
+            return
+        }
+    }
+    setUIntParameterValue(param, param.value + step)
+}
+
