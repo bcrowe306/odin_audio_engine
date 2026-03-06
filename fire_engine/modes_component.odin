@@ -15,7 +15,7 @@ Mode :: struct {
     onDeInitialize: proc(ptr: rawptr),
     addComponent: proc(mode: ^Mode, component: ^Component),
     removeComponent: proc(mode: ^Mode, component: ^Component),
-    handleMidiMsg: proc(modes_component: ^ModesComponent, msg: ^ShortMessage) -> bool,
+    handleMidiMsg: proc(mode: ^Mode, msg: ^ShortMessage) -> bool,
 }
 
 Mode_HandleMidiMsg :: proc(modes_component: ^ModesComponent, msg: ^ShortMessage) -> bool {
@@ -26,8 +26,8 @@ Mode_HandleMidiMsg :: proc(modes_component: ^ModesComponent, msg: ^ShortMessage)
     }
     for component_ptr in mode.components {
         component := cast(^Component)component_ptr
-        if component.handleMidiMsg != nil {
-            if component.handleMidiMsg(component, msg) {
+        if component.handleInput != nil {
+            if component.handleInput(component, msg) {
                 handled = true
             }
          }
@@ -92,9 +92,9 @@ Mode_AddComponent :: proc(mode: ^Mode, component: ^Component) {
 }
 
 Mode_RemoveComponent :: proc(mode: ^Mode, component: ^Component) {
-    for i, comp_ptr in mode.components {
+    for comp_ptr, i in mode.components {
         if comp_ptr == component {
-            removeAt(&mode.components, i)
+            ordered_remove(&mode.components, i)
             break
         }
     }
@@ -111,7 +111,6 @@ ModesComponent :: struct {
     deInitialize: proc(modes_component: ^ModesComponent),
     
     addMode: proc(modes_component: ^ModesComponent, mode: ^Mode),
-    removeMode: proc(modes_component: ^ModesComponent, mode: ^Mode),
     switchMode: proc(modes_component: ^ModesComponent, mode_name: string),
     pushMode: proc(modes_component: ^ModesComponent, mode_name: string),
     popMode: proc(modes_component: ^ModesComponent),
@@ -136,7 +135,6 @@ createModesComponent :: proc() -> ^ModesComponent {
     modes_component.initialize = ModesComponent_Initialize
     modes_component.deInitialize = ModesComponent_DeInitialize
     modes_component.addMode = ModesComponent_AddMode
-    modes_component.removeMode = ModesComponent_RemoveMode
     modes_component.switchMode = ModesComponent_SwitchMode
     modes_component.pushMode = ModesComponent_PushMode
     modes_component.popMode = ModesComponent_PopMode
@@ -193,14 +191,6 @@ ModesComponent_AddMode :: proc(modes_component: ^ModesComponent, mode: ^Mode) {
     modes_component.modes[mode.name] = mode
 }
 
-ModesComponent_RemoveMode :: proc(modes_component: ^ModesComponent, mode: ^Mode) {
-    for mode_name, existing_mode in modes_component.modes {
-        if mode.name == existing_mode.name {
-            delete(modes_component.modes, mode_name)
-            break
-        }
-    }
-}
 
 ModesComponent_SwitchMode :: proc(modes_component: ^ModesComponent, mode_name: string) {
     if mode, exists := modes_component.modes[mode_name]; exists {

@@ -12,8 +12,6 @@ ControlSurface :: struct {
     addModesComponent: proc(control_surface: ^ControlSurface, modes_component: ^ModesComponent),
     addComponent: proc(control_surface: ^ControlSurface, component: ^Component),
     addControl: proc(control_surface: ^ControlSurface, control: rawptr, control_name: string),
-    getComponent: proc(control_surface: ^ControlSurface, component_name: string) -> ^Component,
-    getControl: proc(control_surface: ^ControlSurface, control_name: string) -> rawptr,
     initialize: proc(control_surface: ^ControlSurface, fe: ^FireEngine),
     deInitialize: proc(control_surface: ^ControlSurface),
     activate: proc(control_surface: ^ControlSurface),
@@ -28,8 +26,6 @@ createControlSurface :: proc(name: string, device_id: string) -> ^ControlSurface
     control_surface.addModesComponent = controlSurfaceAddModesComponent
     control_surface.addComponent = controlSurfaceAddComponent
     control_surface.addControl = controlSurfaceAddControl
-    control_surface.getComponent = controlSurfaceGetComponent
-    control_surface.getControl = controlSurfaceGetControl
     control_surface.initialize = initializeControlSurface
     control_surface.deInitialize = deInitializeControlSurface
     control_surface.activate = activateControlSurface
@@ -50,8 +46,8 @@ defaultHandleMidiMsg :: proc(control_surface: ^ControlSurface, msg: ^ShortMessag
         }
     }
     for component in control_surface.components {
-        if component.handleMidiMsg != nil {
-            if component.handleMidiMsg(component, msg) {
+        if component.handleInput != nil {
+            if component.handleInput(component, msg) {
                 handled = true
             }
         }
@@ -60,11 +56,11 @@ defaultHandleMidiMsg :: proc(control_surface: ^ControlSurface, msg: ^ShortMessag
 }
 
 controlSurfaceAddModesComponent :: proc(control_surface: ^ControlSurface, modes_component: ^ModesComponent) {
-    control_surface.modes[modes_component.name] = modes_component
+    append(&control_surface.modes, modes_component)
 }
 
 controlSurfaceAddComponent :: proc(control_surface: ^ControlSurface, component: ^Component) {
-    control_surface.components[component.name] = component
+    append(&control_surface.components, component)
 }
 
 controlSurfaceAddControl :: proc(control_surface: ^ControlSurface, control: rawptr, control_name: string) {
@@ -83,31 +79,14 @@ controlSurfaceAddControl :: proc(control_surface: ^ControlSurface, control: rawp
     }
 }
 
-controlSurfaceGetComponent :: proc(control_surface: ^ControlSurface, component_name: string) -> ^Component {
-    if component, exists := control_surface.components[component_name]; exists {
-        return component
-    }
-    return nil
-}
-
-controlSurfaceGetControl :: proc(control_surface: ^ControlSurface, control_name: string) -> rawptr {
-    for ptr in control_surface.controls {
-        control := cast(^Control)ptr
-        if control.name == control_name {
-            return ptr
-        }
-    }
-    return nil
-}
-
 initializeControlSurface :: proc(control_surface: ^ControlSurface, fe: ^FireEngine) {
     control_surface.fe = fe
-    for _, modes_component in control_surface.modes {
+    for modes_component in control_surface.modes {
         for _, mode in modes_component.modes {
             mode.initialize(mode, control_surface, control_surface.midi_device_name, fe)
         }
     }
-    for _, component in control_surface.components {
+    for component in control_surface.components {
         component.initialize(component, control_surface, control_surface.midi_device_name, fe)
     }
 }

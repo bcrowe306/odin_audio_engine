@@ -9,7 +9,6 @@ import fe "fire_engine"
 
 
 main :: proc() {
-
     
     // Fire Engine initialization and startup
     fire_engine := fe.createFireEngine()
