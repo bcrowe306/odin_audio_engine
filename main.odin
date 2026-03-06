@@ -1,3 +1,4 @@
+#+feature using-stmt
 package main
 
 import "core:fmt"
@@ -6,21 +7,23 @@ import vg "vendor:nanovg"
 import clay "app_framework/clay-odin"
 import fe "fire_engine"
 
-main :: proc() {
-    using fmt
-    using fe
 
+main :: proc() {
+
+    
     // Fire Engine initialization and startup
-    fe := createFireEngine()
-	fe.midi_engine.debug = true
-	fe->init()
-	fe->start()
-	defer fe->uninit()
+    fire_engine := fe.createFireEngine()
+	fire_engine.midi_engine.debug = true
+    fire_engine.audio_engine->setMultithreadedGraph(false)
+	fire_engine->init()
+	fire_engine->start()
+	defer fire_engine->uninit()
+    ph := fire_engine.audio_engine->getPlayhead()
 
     // Create the application framework
     app := app_framework.App_Create("Odin Audio Engine", 1080, 288, 60.0)
     app_framework.App_Init(app)
-    app.user_data = fe
+    app.user_data = fire_engine
 
     // Create the application UI
     ui := app_framework.createUI(vg.Color{0, 0, 0, 255})
@@ -55,6 +58,11 @@ main :: proc() {
         vg.FillColor(ctx, vg.RGBA(255, 255, 255, 255))
         vg.Text(ctx, el.bounds.x + 10, el.bounds.y + 30, fmt.tprintf("Selected Track: %d", fe.tracks.selected_track_index + 1))
     }
+
+    app_framework.signalConnect(button_el.onPressed, proc(value: any, data: rawptr) {
+        fe := cast(^fe.FireEngine)data
+        fe.transport->togglePlay()
+     }, fire_engine )
 
     
     

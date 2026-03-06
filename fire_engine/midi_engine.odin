@@ -23,7 +23,7 @@ MidiEngine :: struct {
     devices: map[string]^MidiDevice,
     debug: bool,
     input_threads: map[string]^thread.Thread,
-    control_surfaces: map[string]HandleMidiInputProc, // Map of control surface name to pointer to control surface struct. This allows the MIDI engine to route incoming MIDI messages to the appropriate control surface for handling.
+    control_surfaces: map[string]^ControlSurface, // Map of control surface name to pointer to control surface struct. This allows the MIDI engine to route incoming MIDI messages to the appropriate control surface for handling.
     auto_start_all: bool,
     audio_engine_midi_message_queue: ^SPSC(1024, ShortMessage),
 
@@ -40,6 +40,7 @@ MidiEngine :: struct {
     disableDevice: proc(engine: ^MidiEngine, deviceName: string) -> bool,
     sendMsg: proc(engine: ^MidiEngine, deviceName: string, msg: ShortMessage),
     sendSysexMsg: proc(engine: ^MidiEngine, deviceName: string, msg: []u8),
+    addControlSurface: proc(engine: ^MidiEngine, controlSurface: ^ControlSurface),
 }
 
 createMidiEngine :: proc() -> ^MidiEngine {
@@ -78,14 +79,18 @@ unInitializeMidieEngine :: proc(engine: ^MidiEngine) {
     portmidi.Terminate()
 }
 
+addControlSurface :: proc(engine: ^MidiEngine, controlSurface: ^ControlSurface) {
+    engine.control_surfaces[controlSurface.name] = controlSurface
+}
+
 midiInputCallback :: proc(engine: ^MidiEngine, msg: ^ShortMessage) {
     if engine.debug {
         fmt.printfln("Device: %s, Message: %s", msg.device, msg->toHexString())
     }
     msg_handled := false
-    for midi_device_name, handleInputProc in engine.control_surfaces {
-        if midi_device_name == msg.device && handleInputProc != nil {
-            if handleInputProc(msg) {
+    for midi_device_name, control_surface in engine.control_surfaces {
+        if midi_device_name == msg.device && control_surface != nil {
+            if control_surface.handleMidiMsg(control_surface, msg) {
                 msg_handled = true
                 break
             }

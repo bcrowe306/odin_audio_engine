@@ -62,7 +62,6 @@ AudioEngine :: struct {
 
 createEngine :: proc(sample_rate: u32 = 48000, channels: u32 = 2, format: ma.format = ma.format.f32, buffer_size: u32 = 256, auto_start: bool = true) -> ^AudioEngine {
     ae := new(AudioEngine)
-    using fmt
 
     ae.sample_rate = sample_rate
     ae.channels = channels

@@ -44,8 +44,8 @@ loadWaveFile :: proc(path: string, target_sample_rate: u32 = 0, allocator := con
 		return WaveAudio{}, .InvalidExtension
 	}
 
-	file_bytes, ok := os.read_entire_file(path, allocator)
-	if !ok {
+	file_bytes, err := os.read_entire_file(path, allocator)
+	if err != nil {
 		return WaveAudio{}, .IoFailure
 	}
 	defer delete(file_bytes, allocator)

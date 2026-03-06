@@ -58,8 +58,7 @@ threadAudioGraphStateCreate :: proc(allocator := context.allocator) -> ^ThreadAu
 	state.task_data = make([dynamic]ThreadAudioGraphTaskData, 0, 32, allocator)
 	state.level_groups = make([dynamic][dynamic]^AudioNode, 0, 16, allocator)
 	state.producer_node_lookup = make(map[u64]^AudioNode)
-
-	worker_count := max(os.processor_core_count() - 1, 1)
+	worker_count := max(os.get_processor_core_count() - 1, 1)
 	worker_count = min(worker_count, THREAD_AUDIO_GRAPH_MAX_WORKERS)
 	state.worker_count = worker_count
 

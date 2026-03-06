@@ -7,12 +7,18 @@ FireEngine :: struct {
     command_controller: ^CommandController,
     tracks: Tracks,
     metronome: ^Metronome,
+    transport: ^Transport,
 
     // Methods
     init: proc(fe: ^FireEngine),
     start: proc(fe: ^FireEngine),
     stop: proc(fe: ^FireEngine),
+    addControlSurface: proc(fe: ^FireEngine, controlSurface: ^ControlSurface),
     uninit: proc(fe: ^FireEngine),
+}
+
+FireEngine_AddControlSurface :: proc(fe: ^FireEngine, controlSurface: ^ControlSurface) {
+    fe.midi_engine->addControlSurface(controlSurface)
 }
 
 createFireEngine :: proc() -> ^FireEngine {
@@ -29,8 +35,9 @@ createFireEngine :: proc() -> ^FireEngine {
     fe.start = FireEngine_Start
     fe.stop = FireEngine_Stop
     fe.uninit = FireEngine_Uninit
+    fe.addControlSurface = FireEngine_AddControlSurface
     fe.tracks = createTracks(fe)
-    
+    fe.transport = createTransportNode(fe)
     return fe
 }
 
@@ -55,6 +62,9 @@ FireEngine_Uninit :: proc(fe: ^FireEngine) {
 
 FireEngine_Start :: proc(fe: ^FireEngine) {
     fe.audio_engine->start()
+    
+    // Set default tempo
+    fe.audio_engine.playhead->setTempo(120.0)
 
     // Start the metronome
     fe.metronome = createMetronomeNode(fe)

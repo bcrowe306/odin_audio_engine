@@ -79,6 +79,7 @@ createMetronomeNode :: proc(fe: ^FireEngine) -> ^Metronome {
     node.metronome_volume->set(-12.0)
     node.beat_volume->set(-9.0)
     node.bar_volume->set(0.0)
+    node.enabled->set(true)
     return node
 }
 
@@ -88,6 +89,10 @@ metronomeOnPlayheadTick :: proc(value: any, user_data: rawptr) {
     if node == nil || node.metronome_sample_node == nil || !node.enabled.value {
         return
     }
+    if tick_event.playhead_state == .Stopped || tick_event.playhead_state == .Paused {
+        return
+    }
+    
     if node.enabled->get() {
 
         if tick_event.type == .Bar {
