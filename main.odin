@@ -6,14 +6,17 @@ import app_framework "app_framework"
 import vg "vendor:nanovg"
 import clay "app_framework/clay-odin"
 import fe "fire_engine"
-
+import "core:log"
 
 main :: proc() {
-    
+    logger := log.create_console_logger()
+    context.logger = logger
     // Fire Engine initialization and startup
     fire_engine := fe.createFireEngine()
 	fire_engine.midi_engine.debug = true
     fire_engine.audio_engine->setMultithreadedGraph(false)
+    cs := createMpcStudioBlackCs()
+    fire_engine->addControlSurface(cs)
 	fire_engine->init()
 	fire_engine->start()
 	defer fire_engine->uninit()

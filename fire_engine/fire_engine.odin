@@ -45,14 +45,24 @@ FireEngine_Init :: proc(fe: ^FireEngine) {
     fe.resource_manager->init()
     fe.audio_engine->init()
     fe.midi_engine->init()
+    for _, control_surface in fe.midi_engine.control_surfaces {
+        control_surface->initialize(fe)
+    }
 }
 
 FireEngine_Uninit :: proc(fe: ^FireEngine) {
 
-    fe.audio_engine->uninit()
-    free(fe.audio_engine)
+    // Midi
+    for _, control_surface in fe.midi_engine.control_surfaces {
+        control_surface->deInitialize()
+    }
     fe.midi_engine->uninit()
     free(fe.midi_engine)
+
+    // Audio
+    fe.audio_engine->uninit()
+    free(fe.audio_engine)
+    
 
     // Resource manager
     fe.resource_manager->shutdown()
@@ -62,6 +72,10 @@ FireEngine_Uninit :: proc(fe: ^FireEngine) {
 
 FireEngine_Start :: proc(fe: ^FireEngine) {
     fe.audio_engine->start()
+    // Activate control surfaces
+    for _, control_surface in fe.midi_engine.control_surfaces {
+        control_surface->activate()
+    }
     
     // Set default tempo
     fe.audio_engine.playhead->setTempo(120.0)

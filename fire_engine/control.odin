@@ -2,6 +2,7 @@ package fire_engine
 
 import "core:encoding/uuid"
 import "core:crypto"
+import "core:log"
 
 Control :: struct {
     id: uuid.Identifier,
@@ -11,6 +12,7 @@ Control :: struct {
     identifier: u8,
     enabled: bool,
     active: bool,
+    passthrough: bool, // If true, the control will pass MIDI messages through to the audio engine even if they are handled by the control. This is useful for controls that want to both handle a message and allow it to be processed by the DAW/audio engine (e.g. a play button that also sends a play message to the DAW)
     fe: ^FireEngine,
     device_name: string,
     control_surface: ^ControlSurface,
@@ -66,10 +68,15 @@ deactivateControl :: proc(ptr: rawptr) {
 defaultInputHandler :: proc(ptr: rawptr, msg: ^ShortMessage) -> bool {
     // By default, we emit an event for any message that matches the control's assigned MIDI message
     control := cast(^Control)ptr
+    handled: = false
     if control.active && control.enabled && control.initialized && control.onInput != nil  {
-        return control.onInput(ptr, msg)
+        handled = control.onInput(ptr, msg)
     }
-    return false
+    if control.passthrough {
+        return false
+    }
+    
+    return handled
 }
 
 configureControl :: proc(new_control: rawptr, name: string) {

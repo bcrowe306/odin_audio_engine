@@ -4,6 +4,7 @@ import "core:thread"
 import "vendor:portmidi"
 import "core:fmt"
 import "core:time"
+import "core:log"
 
 // TODO: FInish implementing MIDI output functionality and control surface feedback
 // TODO: Finish device enable/disable functionality and use it in the UI
@@ -57,6 +58,7 @@ createMidiEngine :: proc() -> ^MidiEngine {
     engine.closeDeviceInput = closeDeviceInput
     engine.openDeviceOutput = openDeviceOutput
     engine.closeDeviceOutput = closeDeviceOutput
+    engine.addControlSurface = addControlSurface
     engine.init = initializeMidiEngine
     engine.enableDevice = enabledDevice
     engine.disableDevice = disableDevice
@@ -80,7 +82,7 @@ unInitializeMidieEngine :: proc(engine: ^MidiEngine) {
 }
 
 addControlSurface :: proc(engine: ^MidiEngine, controlSurface: ^ControlSurface) {
-    engine.control_surfaces[controlSurface.name] = controlSurface
+    engine.control_surfaces[controlSurface.midi_device_name] = controlSurface
 }
 
 midiInputCallback :: proc(engine: ^MidiEngine, msg: ^ShortMessage) {
@@ -256,6 +258,7 @@ sendMsg :: proc (engine: ^MidiEngine, deviceName: string, msg: ShortMessage) {
     }
 }
 
+// Sends Sysex message to specified device. Start, 0xF0 and ending 0xF7 bytes are added automatically by the function.
 sendSysexMsg :: proc(engine: ^MidiEngine, deviceName: string, msg: []u8) {
     if device, exists := engine.devices[deviceName]; exists && device.oStream != nil && device.enabled {
         data := make([]u8, len(msg) + 2)

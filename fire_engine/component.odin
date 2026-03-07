@@ -4,16 +4,33 @@ import "core:encoding/uuid"
 import "core:crypto"
 
 Component :: struct {
-    using control : Control,
-    addControl: proc(component: ^Component, control: rawptr, control_name: string = ""),
-    controls_map: map[string]rawptr,
-    removeControl: proc(component: ^Component, control: rawptr),
-    controls : [dynamic]rawptr,
-    activate: proc(ptr: rawptr),
+    id: uuid.Identifier,
+    name: string,
+    active: bool,
+    initialized: bool,
+    enabled: bool,
+    fe: ^FireEngine,
+    control_surface: ^ControlSurface,
+    controls: map[string]rawptr,
     connections: [dynamic]^SignalConnection,
+    
+    addControl: proc(component_ptr: rawptr, control: rawptr),
+    removeControl: proc(component_ptr: rawptr, control: rawptr),
+    
+    activate: proc(component_ptr: rawptr),
+    deactivate: proc(component_ptr: rawptr),
+    initialize: proc(component_ptr: rawptr, fe: ^FireEngine, control_surface: ^ControlSurface),
+    deInitialize: proc(component_ptr: rawptr),
+
+    // User extensions
+    onActivate: proc(component_ptr: rawptr),
+    onDeactivate: proc(component_ptr: rawptr),
+    onInitialize: proc(component_ptr: rawptr),
+    onDeInitialize: proc(component_ptr: rawptr),
+
 
     // Function to add signal connections that will be automatically disconnected when the component is left
-    addConnection: proc(page: ^Component, signal: ^Signal, observer: proc (value: any, user_data: rawptr)) -> ^SignalConnection,
+    addConnection: proc(component: ^Component, signal: ^Signal, observer: proc (value: any, user_data: rawptr)) -> ^SignalConnection,
     
 }
 
@@ -22,141 +39,104 @@ Component :: struct {
 createComponent :: proc(name: string) -> ^Component {
     context.random_generator = crypto.random_generator()
     component := new(Component)
-    component.id = uuid.generate_v4()
-    component.name = name
-    component.enabled = true
-    component.active = false
-    component.initialize = initializeComponent
-    component.handleInput = defaultComponentInputHandler
-    component.addControl = component_addControl
-    component.removeControl = component_removeControl
-    component.activate = activateComponent
-    component.deactivate = deactivateComponent
-    component.addConnection = componentAddConnection
+    configureComponent(component, name)
     return component
 }
 
-componentAddConnection :: proc(page: ^Component, signal: ^Signal, observer: proc (value: any, user_data: rawptr)) -> ^SignalConnection {
-    connection := signalConnect(signal, observer, cast(rawptr)page)
-    append(&page.connections, connection)
+configureComponent :: proc(component: ^Component, name: string) {
+    component.name = name
+    component.id = uuid.generate_v4()
+    component.enabled = true
+    component.active = false
+    component.initialized = false
+    component.initialize = initializeComponent
+    component.deInitialize = deInitializeComponent
+    component.addControl = component_addControl
+    component.activate = activateComponent
+    component.deactivate = deactivateComponent
+    component.removeControl = component_removeControl
+    component.addConnection = componentAddConnection
+}
+
+componentAddConnection :: proc(component: ^Component, signal: ^Signal, observer: proc (value: any, user_data: rawptr)) -> ^SignalConnection {
+    connection := signalConnect(signal, observer, cast(rawptr)component)
+    append(&component.connections, connection)
     return connection
 }
 
-activateComponent :: proc(ptr: rawptr) {
-    component := cast(^Component)ptr
-    comp_control := cast(^Control)ptr
-    component.active = true
-    for control_ptr in component.controls {
+activateComponent :: proc(component_ptr: rawptr) {
+    component := cast(^Component)component_ptr
+    for control_name, control_ptr in component.controls {
         control := cast(^Control)control_ptr
         control.active = true
+        if control.onActivate != nil {
+            control.onActivate(control_ptr)
+        }
     }
+    component.active = true
     if component.onActivate != nil {
-        component.onActivate(ptr)
+        component.onActivate(component_ptr)
     }
 }
 
-deactivateComponent :: proc(ptr: rawptr) {
-    component := cast(^Component)ptr
+deactivateComponent :: proc(component_ptr: rawptr) {
+    component := cast(^Component)component_ptr
     for connection in component.connections {
         signalDisconnect(connection)
     }
     clear(&component.connections)
     
-    for control_ptr in component.controls {
-        control := cast(^Control)control_ptr
+    for _, control in component.controls {
+        control := cast(^Control)control
         control.active = false
-        if control.deactivate != nil {
-            control.deactivate(control_ptr)
+        if control.onDeactivate != nil {
+            control.onDeactivate(cast(rawptr)control)
         }
     }
-    if component.onDeInitialize != nil {
-        component.onDeInitialize(ptr)
-    }
+
     component.active = false
+    if component.onDeactivate != nil {
+        component.onDeactivate(component_ptr)
+    }
+    
 }
 
-initializeComponent :: proc(ptr: rawptr, control_surface: ^ControlSurface, device_name: string, fe: ^FireEngine) {
-    component := cast(^Component)ptr
-    component.control_surface = control_surface
-    component.device_name = device_name
-    component.fe = fe
-    for control_ptr in component.controls {
-        control := cast(^Control)control_ptr
-        if control.initialize != nil {
-            control.initialize(control_ptr, control_surface, component.device_name, fe)
-        }
-    }
-    if component.onInitialize != nil {
-        component.onInitialize(ptr)
-    }
-    component.initialized = true
-}
-
-deInitializeComponent :: proc(ptr: rawptr) {
-    component := cast(^Component)ptr
-    for control_ptr in component.controls {
-        control := cast(^Control)control_ptr
-        if control.deInitialize != nil {
-            control.deInitialize(control_ptr)
-        }
-    }
-    if component.onDeInitialize != nil {
-        component.onDeInitialize(ptr)
-    }
-    component.initialized = false
-}
-
-defaultComponentInputHandler :: proc(component_ptr: rawptr, msg: ^ShortMessage) -> bool {
-    handled := false
+initializeComponent :: proc(component_ptr: rawptr, fe: ^FireEngine, control_surface: ^ControlSurface) {
     component := cast(^Component)component_ptr
-
-    if !component.active || !component.enabled {
-        return false
+    component.control_surface = control_surface
+    component.fe = fe
+    component.initialized = true
+    if component.onInitialize != nil {
+        component.onInitialize(component_ptr)
     }
-
-    for control_ptr in component.controls {
-        control := cast(^Control)control_ptr
-        if control.enabled && control.active && control.handleInput != nil {
-            if control.handleInput(control_ptr, msg) {
-                handled = true
-            }
-        }   
-    }
-    return handled
+    
 }
 
+deInitializeComponent :: proc(component_ptr: rawptr) {
+    component := cast(^Component)component_ptr
+    component.initialized = false
+    if component.onDeInitialize != nil {
+        component.onDeInitialize(component_ptr)
+    }
+}
 
-component_addControl :: proc(component: ^Component, control:rawptr, control_name: string = "") {
+component_addControl :: proc(component_ptr: rawptr, control:rawptr) {
+    component := cast(^Component)component_ptr
     // Process additions
-    exists := false
-    new := cast(^Control)control
-    for ptr in component.controls {
-        existing_control := cast(^Control)ptr
-        if new.id == existing_control.id {
-            exists = true
-            break
-        }
-    }
-    if !exists {
-        n := new.name
-        if control_name != "" {
-            n = control_name
-        }
-        append(&component.controls, control)
+    control := cast(^Control)control
+    component.controls[control.name] = control
 
-        if n != "" {
-            component.controls_map[n] = control
-        }
-    }
 }
 
-component_removeControl :: proc(component: ^Component, control_to_remove: rawptr) {
+component_removeControl :: proc(component_ptr: rawptr, control_to_remove: rawptr) {
+    component := cast(^Component)component_ptr
     control_to_remove := cast(^Control)control_to_remove
     // Process removals
-    for ptr, index in component.controls {
-        control := cast(^Control)ptr
+
+    for control_name, control_ptr in component.controls {
+        control := cast(^Control)control_ptr
         if control.id == control_to_remove.id {
-            ordered_remove(&component.controls, index)
+            delete_key(&component.controls, control_name)
             break
         }
     }

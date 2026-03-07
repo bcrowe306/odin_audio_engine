@@ -14,8 +14,9 @@ ButtonControl :: struct {
 }
 
     
-isMatchingMessage :: proc(control: ^ButtonControl, msg: ^ShortMessage) -> bool {
-    return msg->getMessageType() == control.status && msg->getChannel() == control.channel && msg.data1 == control.identifier
+buttonControl_isMatchingMessage :: proc(control_ptr: rawptr, msg: ^ShortMessage) -> bool {
+    control := cast(^Control)control_ptr
+    return msg->getChannel() == control.channel && msg.data1 == control.identifier
 }
 
 defaultOnPress :: proc(control: ^ButtonControl) {
@@ -35,7 +36,7 @@ defaultOnClick :: proc(control: ^ButtonControl) {
 handleButtonInput :: proc(ptr: rawptr, msg: ^ShortMessage) -> bool {
 
     control := cast(^ButtonControl)ptr
-    if isMatchingMessage(control, msg) {
+    if buttonControl_isMatchingMessage(control, msg) {
 
 
         if msg.data2 != control.value {
@@ -67,11 +68,11 @@ handleButtonInput :: proc(ptr: rawptr, msg: ^ShortMessage) -> bool {
     return false
 }
 
-createButtonControl :: proc(name: string, channel: u8, status: u8, identifier: u8, midi_device: ^MidiDevice = nil) -> ^ButtonControl {
+createButtonControl :: proc(name: string, channel: u8, identifier: u8) -> ^ButtonControl {
     button := new(ButtonControl)
     configureControl(button, name)
     button.channel = channel
-    button.status = status
+    button.status = NOTE_ON
     button.identifier = identifier
     button.pressed = false
     button.value = 0
@@ -79,6 +80,6 @@ createButtonControl :: proc(name: string, channel: u8, status: u8, identifier: u
     button.onRelease = createSignal()
     button.onClick = createSignal()
     button.onValue = createSignal()
-    button.handleInput = handleButtonInput
+    button.onInput = handleButtonInput
     return button
 }

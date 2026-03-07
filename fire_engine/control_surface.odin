@@ -1,21 +1,30 @@
 package fire_engine
 
+import "core:log"
+
 ControlSurface :: struct {
     name: string,
     midi_device_name: string,
     
     fe: ^FireEngine,
     handleMidiMsg: proc(control_surface: ^ControlSurface, msg: ^ShortMessage) -> bool,
-    modes: [dynamic]^ModesComponent,
-    components: [dynamic]^Component,
-    controls: [dynamic]rawptr,
-    addModesComponent: proc(control_surface: ^ControlSurface, modes_component: ^ModesComponent),
-    addComponent: proc(control_surface: ^ControlSurface, component: ^Component),
-    addControl: proc(control_surface: ^ControlSurface, control: rawptr, control_name: string),
+    components: [dynamic]rawptr,
+    controls: map[string]rawptr,
+    user_data: rawptr,
+    addComponent: proc(control_surface: ^ControlSurface, component: rawptr),
+    addControl: proc(control_surface: ^ControlSurface, control: rawptr),
+    getControl: proc(control_surface: ^ControlSurface, control_name: string) -> rawptr,
     initialize: proc(control_surface: ^ControlSurface, fe: ^FireEngine),
     deInitialize: proc(control_surface: ^ControlSurface),
     activate: proc(control_surface: ^ControlSurface),
     deactivate: proc(control_surface: ^ControlSurface),
+    sendMidi: proc(control_surface: ^ControlSurface, msg: ShortMessage),
+    sendSysex: proc(control_surface: ^ControlSurface, msg: []u8),
+
+    onInitialize: proc(control_surface: ^ControlSurface),
+    onDeInitialize: proc(control_surface: ^ControlSurface),
+    onActivate: proc(control_surface: ^ControlSurface),
+    onDeactivate: proc(control_surface: ^ControlSurface),
 }
 
 createControlSurface :: proc(name: string, device_id: string) -> ^ControlSurface {
@@ -23,109 +32,124 @@ createControlSurface :: proc(name: string, device_id: string) -> ^ControlSurface
     control_surface.name = name
     control_surface.midi_device_name = device_id
     control_surface.handleMidiMsg = defaultHandleMidiMsg
-    control_surface.addModesComponent = controlSurfaceAddModesComponent
     control_surface.addComponent = controlSurfaceAddComponent
     control_surface.addControl = controlSurfaceAddControl
+    control_surface.getControl = ControlSurface_GetControl
     control_surface.initialize = initializeControlSurface
     control_surface.deInitialize = deInitializeControlSurface
     control_surface.activate = activateControlSurface
     control_surface.deactivate = deactivateControlSurface
+    control_surface.sendMidi = controlSurface_sendMidi
+    control_surface.sendSysex = controlSurface_sendSysex
+
     return control_surface
+}
+ControlSurface_GetControl :: proc(control_surface: ^ControlSurface, control_name: string) -> rawptr {
+    if control_ptr, ok := control_surface.controls[control_name]; ok {
+        return control_ptr
+    } else {
+        log.error("Control not found: %s", control_name)
+        return nil
+    }
 }
 
 defaultHandleMidiMsg :: proc(control_surface: ^ControlSurface, msg: ^ShortMessage) -> bool {
     handled := false
-    for modes_component in control_surface.modes {
-        if modes_component.current_mode != "" {
-            mode := modes_component.modes[modes_component.current_mode]
-            if mode != nil {
-                if mode.handleMidiMsg(mode, msg) {
-                    handled = true
-                }
-            }
-        }
-    }
-    for component in control_surface.components {
-        if component.handleInput != nil {
-            if component.handleInput(component, msg) {
-                handled = true
-            }
+    for control_name, control_ptr in control_surface.controls {
+        control := cast(^Control)control_ptr
+        if control.handleInput(control_ptr, msg) {
+            handled = true
         }
     }
     return handled
 }
 
-controlSurfaceAddModesComponent :: proc(control_surface: ^ControlSurface, modes_component: ^ModesComponent) {
-    append(&control_surface.modes, modes_component)
-}
-
-controlSurfaceAddComponent :: proc(control_surface: ^ControlSurface, component: ^Component) {
+controlSurfaceAddComponent :: proc(control_surface: ^ControlSurface, component: rawptr) {
     append(&control_surface.components, component)
 }
 
-controlSurfaceAddControl :: proc(control_surface: ^ControlSurface, control: rawptr, control_name: string) {
+controlSurfaceAddControl :: proc(control_surface: ^ControlSurface, control_ptr: rawptr) {
     // Process additions
-    exists := false
-    new := cast(^Control)control
-    for ptr in control_surface.controls {
-        existing_control := cast(^Control)ptr
-        if new.id == existing_control.id {
-            exists = true
-            break
-        }
-    }
-    if !exists {
-        append(&control_surface.controls, control)
+    control := cast(^Control)control_ptr
+    control_surface.controls[control.name] = control_ptr
+}
+
+GetControl :: proc(control_surface: ^ControlSurface, control_name: string, $T: typeid) -> ^T {
+    if control_ptr, ok := control_surface.controls[control_name]; ok {
+        return cast(^T)control_ptr
+    } else {
+        log.error("Control not found: %s", control_name)
+        return nil
     }
 }
 
 initializeControlSurface :: proc(control_surface: ^ControlSurface, fe: ^FireEngine) {
     control_surface.fe = fe
-    for modes_component in control_surface.modes {
-        for _, mode in modes_component.modes {
-            mode.initialize(mode, control_surface, control_surface.midi_device_name, fe)
+    log.info("Initializing control surface: %s", control_surface.name)
+
+    // Initialize controls
+    for control_name, control_ptr in control_surface.controls {
+        control := cast(^Control)control_ptr
+        if control.initialize != nil {
+            control.initialize(control_ptr, control_surface, control_surface.midi_device_name, fe)
         }
     }
-    for component in control_surface.components {
-        component.initialize(component, control_surface, control_surface.midi_device_name, fe)
+
+    for component_ptr in control_surface.components {
+        component := cast(^Component)component_ptr
+        component.initialize(component, fe, control_surface)
+    }
+
+    if control_surface.onInitialize != nil {
+        control_surface.onInitialize(control_surface)
     }
 }
 
 deInitializeControlSurface :: proc(control_surface: ^ControlSurface) {
-    for modes_component in control_surface.modes {
-        for _, mode in modes_component.modes {
-            mode.deInitialize(mode)
-        }
+    for control_name, control_ptr in control_surface.controls {
+        control := cast(^Control)control_ptr
+        control.deactivate(control_ptr)
     }
-    for component in control_surface.components {
+    for component_ptr in control_surface.components {
+        component := cast(^Component)component_ptr
         component.deInitialize(component)
+    }
+    if control_surface.onDeInitialize != nil {
+        control_surface.onDeInitialize(control_surface)
     }
 }
 
 activateControlSurface :: proc(control_surface: ^ControlSurface) {
-    for modes_component in control_surface.modes {
-        if modes_component.current_mode != "" {
-            mode := modes_component.modes[modes_component.current_mode]
-            if mode != nil {
-                mode.activate(mode)
-            }
-        }
-    }
-    for component in control_surface.components {
+    for component_ptr in control_surface.components {
+        component := cast(^Component)component_ptr
         component.activate(component)
+    }
+    if control_surface.onActivate != nil {
+        control_surface.onActivate(control_surface)
     }
 }
 
 deactivateControlSurface :: proc(control_surface: ^ControlSurface) {
-    for modes_component in control_surface.modes {
-        if modes_component.current_mode != "" {
-            mode := modes_component.modes[modes_component.current_mode]
-            if mode != nil {
-                mode.deactivate(mode)
-            }
-        }
-    }
-    for component in control_surface.components {
+    for component_ptr in control_surface.components {
+        component := cast(^Component)component_ptr
         component.deactivate(component)
+    }
+    if control_surface.onDeactivate != nil {
+        control_surface.onDeactivate(control_surface)
+    }
+}
+
+
+
+controlSurface_sendMidi :: proc(control_surface: ^ControlSurface, msg: ShortMessage) {
+    if control_surface.fe != nil && control_surface.fe.midi_engine != nil {
+        control_surface.fe.midi_engine->sendMsg(control_surface.midi_device_name, msg)
+    }
+
+}
+
+controlSurface_sendSysex :: proc(control_surface: ^ControlSurface, msg: []u8) {
+    if control_surface.fe != nil && control_surface.fe.midi_engine != nil {
+        control_surface.fe.midi_engine->sendSysexMsg(control_surface.midi_device_name, msg)
     }
 }

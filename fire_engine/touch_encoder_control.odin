@@ -18,15 +18,7 @@ TouchEncoderControl :: struct {
     onFocusChanged: ^Signal,
 }
 
-createTouchEncoderControl :: proc(
-    name: string,
-    channel: u8,
-    identifier: u8,
-    touch_identifier: u8,
-    default_value: u8 = 0,
-    encoder_msg_type: u8 = 0xB0,
-    touch_msg_type: u8 = 0x90,
-) -> ^TouchEncoderControl {
+createTouchEncoderControl :: proc( name: string, channel: u8, identifier: u8, touch_identifier: u8, default_value: u8 = 0, encoder_msg_type: u8 = 0xB0, touch_msg_type: u8 = 0x90) -> ^TouchEncoderControl {
     touch_encoder_control := new(TouchEncoderControl)
     configureControl(touch_encoder_control, name)
 
