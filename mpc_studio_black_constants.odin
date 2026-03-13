@@ -106,7 +106,6 @@ MPC_STUDIO_BLACK_COMMANDS :: enum(u8) {
     // Add more commands as needed
 }
 
-
 MPCSB_PAD_COLORS :: enum(u8) {
     OFF = 0,
     BLACK = 0,
@@ -122,4 +121,17 @@ MPCSB_PAD_COLORS :: enum(u8) {
     GREEN_DIM = 1,
     GREEN_HALF = 3,
     GREEN_FULL = 7
+}
+
+MPC_PAD_BANK_COUNT :u32 : 8
+
+MPC_PAD_BANKS :: enum(u8) {
+    A = 0,
+    B = 1,
+    C = 2,
+    D = 3,
+    E = 4,
+    F = 5,
+    G = 6,
+    H = 7
 }

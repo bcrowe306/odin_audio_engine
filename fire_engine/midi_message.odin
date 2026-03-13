@@ -21,6 +21,7 @@ ShortMessage :: struct {
     isProgramChange: proc(msg : ^ShortMessage) -> bool,
     isPitchBend: proc(msg : ^ShortMessage) -> bool,
     isChannelPressure: proc(msg : ^ShortMessage) -> bool,
+    isPolyPressure: proc(msg : ^ShortMessage) -> bool,
     toHexString: proc(msg : ^ShortMessage) -> string,
     getFrequency: proc(note: u8) -> f64,
     getNoteName: proc(note: u8) -> string,
@@ -59,6 +60,9 @@ isPitchBend :: proc(msg: ^ShortMessage) -> bool {
 isChannelPressure :: proc(msg: ^ShortMessage) -> bool {
     return getMessageType(msg) == CHANNEL_PRESSURE
 }
+isPolyPressure :: proc(msg: ^ShortMessage) -> bool {
+    return getMessageType(msg) == POLY_PRESSURE
+}
 
 toHexString :: proc(msg: ^ShortMessage) -> string {
     return fmt.tprintf("%02X %02X %02X", msg.status, msg.data1, msg.data2)
@@ -82,6 +86,7 @@ buildMsgStruct :: proc(msg: ^ShortMessage)  {
     msg.isProgramChange = isProgramChange
     msg.isPitchBend = isPitchBend
     msg.isChannelPressure = isChannelPressure
+    msg.isPolyPressure = isPolyPressure
     msg.toHexString = toHexString
     msg.getFrequency = getFrequency
     msg.getNoteName = getNoteName

@@ -228,7 +228,7 @@ engineListenDevice :: proc(thread: ^thread.Thread) {
                 }
             }
         }
-        time.sleep(2 * time.Millisecond)
+        time.sleep(1 * time.Millisecond)
     }
 }
 

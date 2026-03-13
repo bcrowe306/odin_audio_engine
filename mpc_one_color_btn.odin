@@ -1,6 +1,5 @@
 package main
 
-import "core:fmt"
 import fire_engine "fire_engine"
 import log "core:log"
 
@@ -76,7 +75,7 @@ handleButtonInput :: proc(ptr: rawptr, msg: ^fire_engine.ShortMessage) -> bool {
                 control.onRelease->emit(msg)
             }
             if control.onClick != nil {
-                control.onClick->emit(msg)
+                // control.onClick->emit(msg)
             }
             handled = true
         } else {
