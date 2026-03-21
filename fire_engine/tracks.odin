@@ -40,7 +40,7 @@ createTracks :: proc(fe: ^FireEngine) -> Tracks {
         t := createTrack(fe, fmt.tprintf("Track %d", i + 1))
         tracks->addTrack(t)
     }
-    tracks->selectTrackByIndex(1)
+    tracks->selectTrackByIndex(0)
 
     return tracks
 }
@@ -79,7 +79,7 @@ nextTrack :: proc(tracks: ^Tracks) {
     if len(tracks.tracks) == 0 {
         return
     }
-    new_index := (tracks.selected_track_index + 1) % len(tracks.tracks)
+    new_index := math.clamp(tracks.selected_track_index + 1, 0, len(tracks.tracks) - 1)
     tracks.selectTrackByIndex(tracks, new_index)
 }
 
@@ -87,7 +87,7 @@ previousTrack :: proc(tracks: ^Tracks) {
     if len(tracks.tracks) == 0 {
         return
     }
-    new_index := (tracks.selected_track_index - 1 + len(tracks.tracks)) % len(tracks.tracks)
+    new_index := math.clamp(tracks.selected_track_index - 1, 0, len(tracks.tracks) - 1)
     tracks.selectTrackByIndex(tracks, new_index)
 }
 

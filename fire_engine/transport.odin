@@ -12,9 +12,15 @@ Transport :: struct {
     pause: proc (node: ^Transport),
     stop: proc (node: ^Transport),
     togglePlay: proc (node: ^Transport),
+    toggleRecord: proc (node: ^Transport),
+    toggleLoop: proc (node: ^Transport),
     getSongPosition: proc(node: ^Transport) -> SongPosition,
     setSongPosition: proc(node: ^Transport, position: SongPosition),
     isPlaying: proc(node: ^Transport) -> bool,
+    isPaused: proc(node: ^Transport) -> bool,
+    isRecording: proc(node: ^Transport) -> bool,
+    isPrecounting: proc(node: ^Transport) -> bool,
+    isLooping: proc(node: ^Transport) -> bool,
 }
 
 createTransportNode :: proc(fe: ^FireEngine) -> ^Transport {
@@ -24,7 +30,11 @@ createTransportNode :: proc(fe: ^FireEngine) -> ^Transport {
     }
 
     node.playhead = fe.audio_engine.playhead
+    // Tempo Param setup
     node.tempo = createFloatParameter(fe.command_controller, "Tempo", 120.0, 20.0, 300.0)
+    node.tempo.step = 1.0
+    node.tempo.small_step = .01
+    
     node.time_signature_numerator = createIntParameter(fe.command_controller, "Time Signature Numerator", 4, 1, 16)
     node.time_signature_denominator = createIntParameter(fe.command_controller, "Time Signature Denominator", 4, 1, 16)
     node.precount = createIntParameter(fe.command_controller, "Precount", 0, 0, 16)
@@ -34,9 +44,15 @@ createTransportNode :: proc(fe: ^FireEngine) -> ^Transport {
     node.pause = Transport_Pause
     node.stop = Transport_Stop
     node.togglePlay = Transport_TogglePlay
+    node.toggleRecord = Transport_ToggleRecord
+    node.toggleLoop = Transport_ToggleLoop
     node.getSongPosition = Transport_GetSongPosition
     node.setSongPosition = Transport_SetSongPosition
     node.isPlaying = Transport_IsPlaying
+    node.isPaused = Transport_IsPaused
+    node.isRecording = Transport_IsRecording
+    node.isPrecounting = Transport_IsPrecounting
+    node.isLooping = Transport_IsLooping
 
     signalConnect(node.tempo.onChange, transportTempoParameterChanged, cast(rawptr)node)
     signalConnect(node.time_signature_numerator.onChange, transportTimeSignatureNumeratorParameterChanged, cast(rawptr)node)
@@ -115,12 +131,8 @@ Transport_Record :: proc(node: ^Transport) {
         return
     }
 
-    if node.playhead.precount_enabled {
-        node.playhead->setState(.Precount)
-        return
-    }
-
     node.playhead->setState(.Recording)
+    
 }
 
 Transport_Pause :: proc(node: ^Transport) {
@@ -173,5 +185,58 @@ Transport_IsPlaying :: proc(node: ^Transport) -> bool {
     }
 
     return node.playhead.playhead_state == .Playing || node.playhead.playhead_state == .Precount || node.playhead.playhead_state == .Recording
+}
+
+Transport_IsPaused :: proc(node: ^Transport) -> bool {
+    if node == nil || node.playhead == nil {
+        return false
+    }
+
+    return node.playhead.playhead_state == .Paused
+}
+
+Transport_IsRecording :: proc(node: ^Transport) -> bool {
+    if node == nil || node.playhead == nil {
+        return false
+    }
+
+    return node.playhead.playhead_state == .Recording
+}
+
+Transport_IsPrecounting :: proc(node: ^Transport) -> bool {
+    if node == nil || node.playhead == nil {
+        return false
+    }
+
+    return node.playhead.playhead_state == .Precount
+}
+
+Transport_IsLooping :: proc(node: ^Transport) -> bool {
+    if node == nil || node.playhead == nil {
+        return false
+    }
+
+    return node.playhead.looping
+}
+
+Transport_ToggleRecord :: proc(node: ^Transport) {
+    if node == nil || node.playhead == nil {
+        return
+    }
+
+    if Transport_IsRecording(node) {
+        node.playhead->setState(.Playing)
+    } else {
+        node->record()
+    }
+}
+
+Transport_ToggleLoop :: proc(node: ^Transport) {
+    if node == nil || node.playhead == nil {
+        return
+    }
+
+    node.loop_enabled->set(!node.loop_enabled.value)
+    
 }
 

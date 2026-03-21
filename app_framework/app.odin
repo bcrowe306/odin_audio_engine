@@ -24,6 +24,7 @@ App :: struct {
     init: proc(app: ^App),
     uninit: proc(app: ^App),
     run: proc(app: ^App),
+    setUI: proc(app: ^App, ui: ^UI),
     update: proc(app: ^App, delta_time: f64, events: []sdl.Event, user_data: rawptr),
     draw: proc(app: ^App, user_data: rawptr),
     loadFont: proc(app: ^App, name: string, file_path: string) -> int,
@@ -47,6 +48,7 @@ App_Create :: proc(title: string, width: i32, height: i32, frames_per_second: f3
     app.update = App_Update
     app.draw = App_Draw
     app.loadFont = App_LoadFont
+    app.setUI = App_SetUI
     return app
 }
 
@@ -243,4 +245,8 @@ App_Draw :: proc(app: ^App, user_data: rawptr) {
     // vg.Text(vg_ctx, 120, 150, "Hello NanoVG!")
 }
 
+App_SetUI :: proc(app: ^App, ui: ^UI) {
+    app.ui = ui
+    ui.app_user_data = app.user_data
+}
 

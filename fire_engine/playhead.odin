@@ -222,7 +222,7 @@ playheadTicksPerBeat :: proc(m: ^PlayheadNode) -> u32 {
 }
 
 playheadIsBeat :: proc(playhead: ^PlayheadNode) -> bool {
-    return playhead.currentTick % u64(playhead.ticks_per_beat) == 0
+    return playhead.song_position.tick % playhead.ticks_per_beat == 0
 }
 
 playheadTicksPerBar :: proc(m: ^PlayheadNode) -> u32 {
@@ -306,6 +306,7 @@ playheadStateRecording :: proc(playhead: ^PlayheadNode, frame: u32) {
 }
 
 playheadSetState :: proc(playhead: ^PlayheadNode, newState: PlayheadState) {
+    newState := newState
     state_change_allowed := false
     if playhead.playhead_state == newState {
         return
@@ -366,14 +367,17 @@ playheadSetState :: proc(playhead: ^PlayheadNode, newState: PlayheadState) {
             switch old_state {
                 case .Stopped:
                     state_change_allowed = true
+                    if playhead.precount_enabled {
+                        newState = .Precount
+                    }
                 case .Playing:
                     state_change_allowed = true
                 case .Precount:
-                    state_change_allowed = false
-                case .Recording:
                     state_change_allowed = true
-                case .Paused:
+                case .Recording:
                     state_change_allowed = false
+                case .Paused:
+                    state_change_allowed = true
             }
     }
     if state_change_allowed {

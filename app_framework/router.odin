@@ -2,6 +2,8 @@ package app
 
 import "core:fmt"
 import "core:container/queue"
+import vg "vendor:nanovg"
+import sdl "vendor:sdl3"
 
 // TODO: Add support to pass data between pages when switching, pushing, or popping. This will allow for more dynamic pages that can react to the context in which they were opened. For example, if we push a plugin page from a sample slot, we can pass a reference to that sample slot so that the plugin page can directly manipulate the sample slot's parameters.
 
@@ -27,9 +29,11 @@ resetPageSwitchCommnand :: proc(router: ^Router) {
 }
 
 Router :: struct {
+    using page: Page,
     pages: map[string]^Page,
     stack: queue.Queue(string),
     next_page: PageSwitchCommand,
+    app_user_data: rawptr,
     
     // Methods
     addPage: proc(router: ^Router, page: ^Page),
@@ -40,8 +44,9 @@ Router :: struct {
     swap : proc(router: ^Router, page_name: string, data: any = nil),
 }
 
-createRouter :: proc() -> ^Router {
+createRouter :: proc(name: string) -> ^Router {
     router := new(Router)
+    configurePage(cast(^Page)router, name, nil)
     router.pages = make(map[string]^Page)
     router.stack = queue.Queue(string){}
     router.addPage = addPageToRouter
@@ -51,6 +56,8 @@ createRouter :: proc() -> ^Router {
     router.pop = popPage
     router.swap = swapPage
     router.next_page = PageSwitchCommand{}
+    router._update = routerUpdate
+    router.draw = routerDraw
     resetPageSwitchCommnand(router)
 
     return router
@@ -78,32 +85,57 @@ swapPage :: proc(router: ^Router, page_name: string, data: any = nil) {
 beforeNav :: proc (router: ^Router, current_page: ^Page, next_page: ^Page) {
 
     if current_page != nil && current_page.beforeLeave != nil {
-        current_page.beforeLeave(current_page)
+        current_page.beforeLeave(current_page, router.app_user_data)
     }
     if current_page != nil && current_page.onBeforeLeave != nil {
-        current_page.onBeforeLeave(current_page)
+        current_page.onBeforeLeave(current_page, router.app_user_data)
     }
     if next_page != nil && next_page.beforeLoad != nil {
-        next_page.beforeLoad(next_page)
+        next_page.beforeLoad(next_page, router.app_user_data)
     }
     if next_page != nil && next_page.onBeforeLoad != nil {
-        next_page.onBeforeLoad(next_page)
+        next_page.onBeforeLoad(next_page, router.app_user_data)
     }
     
 }
 
 afterNav :: proc (router: ^Router, current_page: ^Page, next_page: ^Page, data: any) {
     if current_page != nil && current_page.afterLeave != nil {
-        current_page.afterLeave(current_page)
+        current_page.afterLeave(current_page, router.app_user_data)
     }
     if current_page != nil && current_page.onAfterLeave != nil {
-        current_page.onAfterLeave(current_page)
+        current_page.onAfterLeave(current_page, router.app_user_data)
     }
     if next_page != nil && next_page.afterLoad != nil {
-        next_page.afterLoad(next_page, data)
+        next_page.afterLoad(next_page, router.next_page.data, router.app_user_data)
     }
     if next_page != nil && next_page.onAfterLoad != nil {
-        next_page.onAfterLoad(next_page, data)
+        next_page.onAfterLoad(next_page, router.next_page.data, router.app_user_data)
+    }
+}
+
+routerUpdate :: proc(router: ^Page, app: ^App, delta_time: f64, events: []sdl.Event, user_data: rawptr) {
+    router := cast(^Router)router
+
+    current_page := router->getCurrentPage()
+    if router.next_page.command != RouterStackCommand.None {
+        if current_page != nil {
+            fmt.printf("Clearing widgets on page switch from page: %s\n", current_page.name)
+        }
+    }
+    
+    router->processPageSwitch()
+    current_page = router->getCurrentPage()
+    if current_page != nil && current_page._update != nil {
+        current_page._update(current_page, app, delta_time, events, user_data)
+    }
+}
+
+routerDraw :: proc(page_ptr: ^Page, vg_ctx: ^vg.Context, user_data: rawptr) {
+    router := cast(^Router)page_ptr
+    page := router->getCurrentPage()
+    if page != nil && page.draw != nil {
+        page->draw(vg_ctx, user_data)
     }
 }
 

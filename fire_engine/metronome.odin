@@ -10,6 +10,7 @@ Metronome :: struct {
     beat_volume: ^DbParameter,
     bar_volume: ^DbParameter,
     current_tick_type: TickType,
+    toggle: proc(node: ^Metronome),
     attachToGraph: proc(node: ^Metronome, graph: ^AudioGraph),
 }
 
@@ -68,6 +69,7 @@ createMetronomeNode :: proc(fe: ^FireEngine) -> ^Metronome {
     node.bar_volume = createDbParameter(fe.command_controller, "Bar Volume", 0.0)
     node.current_tick_type = .Beat
     node.attachToGraph = metronomeNodeAttachToGraph
+    node.toggle = metronomeToggle
 
     signalConnect(node.metronome_volume.onChange, metronomeVolumeParameterChanged, cast(rawptr)node)
     signalConnect(node.beat_volume.onChange, metronomeBeatVolumeParameterChanged, cast(rawptr)node)
@@ -76,7 +78,7 @@ createMetronomeNode :: proc(fe: ^FireEngine) -> ^Metronome {
     signalConnect(fe.audio_engine.playhead.onTick, metronomeOnPlayheadTick, cast(rawptr)node)
 
     // Set default levels
-    node.metronome_volume->set(-12.0)
+    node.metronome_volume->set(-0.0)
     node.beat_volume->set(-9.0)
     node.bar_volume->set(0.0)
     node.enabled->set(true)
@@ -123,5 +125,12 @@ metronomeNodeAttachToGraph :: proc(node: ^Metronome, graph: ^AudioGraph) {
 
     metronomeApplyGainForTickType(node, node.current_tick_type)
     node.node_id = node.levels_node.node_id
+}
+
+metronomeToggle :: proc(node: ^Metronome){
+    if node == nil {
+        return
+    }
+    node.enabled->set(!node.enabled.value)
 }
 
