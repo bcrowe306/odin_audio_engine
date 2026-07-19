@@ -4,6 +4,7 @@ import "core:encoding/uuid"
 import "core:crypto"
 import "core:log"
 
+// Control is the base struct for all Control Surface Controls. It provides a common interface for managing MIDI messages, activation, and initialization.
 Control :: struct {
     id: uuid.Identifier,
     name: string,

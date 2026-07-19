@@ -126,6 +126,11 @@ createMPCStudioBlackControls :: proc(cs: ^fire_engine.ControlSurface) {
     cs->addControl(fire_engine.createEncoderControl("jogWheel", 0, u8(MPCSB_CONTROL.JOG_WHEEL)))
     cs->addControl(createMPCPadsControl("padsControl", 9))
 
+}
+
+
+createMPCStudioBlackComponents :: proc(cs: ^fire_engine.ControlSurface) {
+
     padModesComponent := fire_engine.createComponent("padModesComponent")
     padModesComponent->addControl(cs->getControl("padBankAButton"))
     padModesComponent->addControl(cs->getControl("padBankBButton"))
@@ -212,6 +217,7 @@ createMPCStudioBlackControls :: proc(cs: ^fire_engine.ControlSurface) {
     transportComponent->addControl(cs->getControl("overdubButton"))
     transportComponent->addControl(cs->getControl("stopButton"))
     transportComponent->addControl(cs->getControl("playStartButton"))
+
     transportComponent.onActivate = proc(component_ptr: rawptr) {
         component := cast(^fire_engine.Component)component_ptr
         fe := component.fe
@@ -246,7 +252,7 @@ createMPCStudioBlackControls :: proc(cs: ^fire_engine.ControlSurface) {
     trans_mode->addComponent(transportComponent)
     pads_mode := fire_engine.createMode("pads_mode")
     pads_mode->addComponent(padModesComponent)
-    modescomp := fire_engine.createModesComponent("testMode", "pads_mode")
+    modescomp := fire_engine.createModesComponent("testMode", "trans_mode")
     modescomp->addModes(trans_mode, pads_mode)
     modescomp->addControl(cs->getControl("projectButton"))
     modescomp->addControl(cs->getControl("seqButton"))
@@ -291,4 +297,3 @@ createMPCStudioBlackControls :: proc(cs: ^fire_engine.ControlSurface) {
 
     cs->addComponent(modescomp)
 }
-

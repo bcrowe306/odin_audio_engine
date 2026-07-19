@@ -3,6 +3,8 @@ package fire_engine
 import "core:encoding/uuid"
 import "core:crypto"
 
+
+// Component is base struct for all Control Surfaces Components. It provides a common interface for managing controls, activation, and initialization.
 Component :: struct {
     id: uuid.Identifier,
     name: string,
@@ -14,7 +16,10 @@ Component :: struct {
     controls: map[string]rawptr,
     connections: [dynamic]^SignalConnection,
     
+    // Adds a control to the component. The control is stored in the controls map using its name as the key.
     addControl: proc(component_ptr: rawptr, control: rawptr),
+
+    // Removes a control from the component. The control is removed from the controls map based on its name.
     removeControl: proc(component_ptr: rawptr, control: rawptr),
     
     activate: proc(component_ptr: rawptr),
@@ -22,14 +27,20 @@ Component :: struct {
     initialize: proc(component_ptr: rawptr, fe: ^FireEngine, control_surface: ^ControlSurface),
     deInitialize: proc(component_ptr: rawptr),
 
-    // User extensions
+    // Override to perform custom actions when the component is activated. This is the place call the components' addConnections function to add signal connections that should be active while the component is active.
     onActivate: proc(component_ptr: rawptr),
+
+    // Override to perform custom actions when the component is deactivated.
     onDeactivate: proc(component_ptr: rawptr),
+
+    // Override to perform custom actions when the component is initialized.
     onInitialize: proc(component_ptr: rawptr),
+
+    // Override to perform custom actions when the component is de-initialized.
     onDeInitialize: proc(component_ptr: rawptr),
 
 
-    // Function to add signal connections that will be automatically disconnected when the component is left
+    // Function to add signal connections that will be automatically disconnected when the component is deactivated. This is useful for managing signal connections that should only be active while the component is active.
     addConnection: proc(component: ^Component, signal: ^Signal, observer: proc (value: any, user_data: rawptr)) -> ^SignalConnection,
     
 }

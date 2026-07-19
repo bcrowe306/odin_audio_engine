@@ -39,7 +39,11 @@ MidiEngine :: struct {
     uninit: proc(engine: ^MidiEngine),
     enableDevice: proc(engine: ^MidiEngine, deviceName: string) -> bool,
     disableDevice: proc(engine: ^MidiEngine, deviceName: string) -> bool,
+
+    // Sends a MIDI message to the specified device. The message is sent as a ShortMessage struct, which contains the status byte, data1 byte, and data2 byte of the MIDI message.
     sendMsg: proc(engine: ^MidiEngine, deviceName: string, msg: ShortMessage),
+
+    // Sends Sysex message to specified device. Start, 0xF0 and ending 0xF7 bytes are added automatically by the function.
     sendSysexMsg: proc(engine: ^MidiEngine, deviceName: string, msg: []u8),
     addControlSurface: proc(engine: ^MidiEngine, controlSurface: ^ControlSurface),
 }

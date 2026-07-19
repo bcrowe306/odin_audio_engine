@@ -26,13 +26,22 @@ App :: struct {
     run: proc(app: ^App),
     setUI: proc(app: ^App, ui: ^UI),
     update: proc(app: ^App, delta_time: f64, events: []sdl.Event, user_data: rawptr),
+
+    // Override to perform custom actions when the application is updated. This is where you can tie in other parts of the application to your UI's Update cycle.
+    onUpdate: proc(app: ^App, delta_time: f64, events: []sdl.Event, user_data: rawptr),
+    
     draw: proc(app: ^App, user_data: rawptr),
+
+    // Override to perform custom actions when the application is drawn. This is where you can tie in other parts of the application to your UI's Draw cycle.
+    onDraw: proc(app: ^App, user_data: rawptr),
+
     loadFont: proc(app: ^App, name: string, file_path: string) -> int,
     user_data: rawptr,
     frames_per_second: f32,
     events: [1024]sdl.Event,
     afterInit: proc(app: ^App),
     beforeUninit: proc(app: ^App),
+
     ui: ^UI,
 }
 
@@ -140,7 +149,7 @@ App_LoadFont :: proc(app: ^App, name: string, file_path: string) -> int {
 App_Run :: proc(app: ^App) {
     app.running = true
     vg_ctx := app.vg_context
-    // Dertmine min_frame_time based on target frames per second
+    // Determine min_frame_time based on target frames per second
     min_frame_time := 1.0 / app.frames_per_second
     // Calculate delta_time for the first frame
     frame_duration := time.Duration(1/app.frames_per_second * 1_000_000_000) // Convert seconds to nanoseconds

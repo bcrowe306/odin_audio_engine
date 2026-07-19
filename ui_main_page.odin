@@ -85,6 +85,14 @@ createUIMainPage :: proc(fire_engine: ^fe.FireEngine) -> ^app_framework.Page {
             text_button_data := cast(^text_button_data)page.elements["song_page_button"].user_data
             text_button_data.color = app_framework.hexToRGBA(TEXT_COLOR)
         }
+
+        level_meters := cast(^LevelMetersElement)page.elements["device_level_meters"]
+        
+        level_meters.linear_peak[0] = fire_engine.metronome.levels_node.peak_linear[0]
+        level_meters.linear_peak[1] = fire_engine.metronome.levels_node.peak_linear[1]
+        level_meters.linear_rms[0] = fire_engine.metronome.levels_node.rms_linear[0]
+        level_meters.linear_rms[1] = fire_engine.metronome.levels_node.rms_linear[1]
+
     }
 
     main_page.afterLoad = proc(page: ^app_framework.Page, data: any, app_user_data: rawptr) {

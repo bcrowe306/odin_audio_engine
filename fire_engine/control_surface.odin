@@ -18,7 +18,11 @@ ControlSurface :: struct {
     deInitialize: proc(control_surface: ^ControlSurface),
     activate: proc(control_surface: ^ControlSurface),
     deactivate: proc(control_surface: ^ControlSurface),
+
+    // Sends a MIDI message to the MIDI device associated with this control surface. The message is sent as a ShortMessage struct, which contains the status byte, data1 byte, and data2 byte of the MIDI message.
     sendMidi: proc(control_surface: ^ControlSurface, msg: ShortMessage),
+
+    // Sends a SysEx message to the MIDI device associated with this control surface. The message is sent as a slice of bytes, and the function automatically adds the start (0xF0) and end (0xF7) bytes to the message.
     sendSysex: proc(control_surface: ^ControlSurface, msg: []u8),
 
     onInitialize: proc(control_surface: ^ControlSurface),

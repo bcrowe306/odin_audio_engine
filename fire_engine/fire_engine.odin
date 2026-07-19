@@ -14,6 +14,8 @@ FireEngine :: struct {
     start: proc(fe: ^FireEngine),
     stop: proc(fe: ^FireEngine),
     addControlSurface: proc(fe: ^FireEngine, controlSurface: ^ControlSurface),
+    app_update_hook: proc(fe: ^FireEngine),
+    app_draw_hook: proc(fe: ^FireEngine),
     uninit: proc(fe: ^FireEngine),
 }
 
@@ -36,10 +38,13 @@ createFireEngine :: proc() -> ^FireEngine {
     fe.stop = FireEngine_Stop
     fe.uninit = FireEngine_Uninit
     fe.addControlSurface = FireEngine_AddControlSurface
+    fe.app_update_hook = FireEngine_AppUpdateHook
+    fe.app_draw_hook = FireEngine_AppDrawHook
     fe.tracks = createTracks(fe)
     fe.transport = createTransportNode(fe)
     return fe
 }
+
 
 FireEngine_Init :: proc(fe: ^FireEngine) {
     fe.resource_manager->init()
@@ -88,4 +93,12 @@ FireEngine_Start :: proc(fe: ^FireEngine) {
 
 FireEngine_Stop :: proc(fe: ^FireEngine) {
     fe.audio_engine->stop()
+}
+
+FireEngine_AppUpdateHook :: proc(fe: ^FireEngine) {
+    
+}
+
+FireEngine_AppDrawHook :: proc(fe: ^FireEngine) {
+    
 }

@@ -6,6 +6,7 @@ import log "core:log"
 createMpcStudioBlackCs :: proc() -> ^fe.ControlSurface {
     cs := fe.createControlSurface("MPC Studio Black", "MPC Studio Black MPC Private")
     createMPCStudioBlackControls(cs)
+    createMPCStudioBlackComponents(cs)
     cs.onInitialize = initializeMPCStudioBlack
     cs.onDeInitialize = deInitializeMPCStudioBlack
     return cs
