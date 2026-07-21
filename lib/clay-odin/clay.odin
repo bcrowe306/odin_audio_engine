@@ -1,4 +1,4 @@
-package clay
+package clays
 
 import "core:c"
 
