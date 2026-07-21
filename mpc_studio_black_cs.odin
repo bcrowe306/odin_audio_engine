@@ -2,6 +2,7 @@ package main
 
 import fe "fire_engine"
 import log "core:log"
+import fmt "core:fmt"
 
 createMpcStudioBlackCs :: proc() -> ^fe.ControlSurface {
     cs := fe.createControlSurface("MPC Studio Black", "MPC Studio Black MPC Private")
@@ -9,6 +10,18 @@ createMpcStudioBlackCs :: proc() -> ^fe.ControlSurface {
     createMPCStudioBlackComponents(cs)
     cs.onInitialize = initializeMPCStudioBlack
     cs.onDeInitialize = deInitializeMPCStudioBlack
+
+    // Set the run_application_loop flag to true to enable the application loop for this control surface
+    cs.run_application_loop = true
+
+    // This is custom frame hook for MPC Study Black display. It runs a predefined frame rate independent of the main application loop. 
+    // You can use this to update the display or perform other periodic tasks.
+    cs.application_loop.frame_hook = proc(delta_time: f32, frame_count: int, user_data: rawptr) {
+        control_surface := cast(^fe.ControlSurface)user_data
+        // Custom frame hook logic for MPC Studio Black
+        // For example, you can poll the device state or update controls here
+        fmt.println("MPC Studio Black Frame Hook: delta_time=", delta_time, ", frame_count=", frame_count)
+    }
     return cs
 }
 
