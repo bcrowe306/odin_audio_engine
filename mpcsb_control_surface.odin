@@ -27,13 +27,40 @@ createMpcStudioBlackCs :: proc() -> ^fe.ControlSurface {
     home_page := MPCSB_Page_create()
     mpcsb_display->addPage("Home", home_page)
 
-    btn1 := MPCSB_Element_create({0, 10, 360, 50})
-    btn1.draw = proc(element: ^MPCSB_Element, cairo_context: ^cairo.context_t) {
-        cairo.set_source_rgba(cairo_context, 1, 1, 1, 1)\
-        cairo.rectangle(cairo_context, element.bounds.x, element.bounds.y, element.bounds.width, element.bounds.height)
-        cairo.fill(cairo_context)
-    }
-    home_page->addElement("btn1", btn1)
+    
+    F1 := FunctionButtonElement_create(0, 84, 60, 12, "F1", false)
+    F2 := FunctionButtonElement_create(60 * 1, 84, 60, 12, "F2", false)
+    F3 := FunctionButtonElement_create(60 * 2, 84, 60, 12, "F3", false)
+    F4 := FunctionButtonElement_create(60 * 3, 84, 60, 12, "F4", false)
+    F5 := FunctionButtonElement_create(60 * 4, 84, 60, 12, "F5", false)
+    F6 := FunctionButtonElement_create(60 * 5, 84, 60, 12, "F6", false)
+    home_page->addElement("btn1", F1)
+    home_page->addElement("btn2", F2)
+    home_page->addElement("btn3", F3)
+    home_page->addElement("btn4", F4)
+    home_page->addElement("btn5", F5)
+    home_page->addElement("btn6", F6)
+
+    ButtonElement1 := ButtonElement_create(0, 0, 60, 12, "Button", false)
+    ButtonElement2 := ButtonElement_create(60 * 1, 0, 60, 12, "Button", true)
+    ButtonElement3 := ButtonElement_create(60 * 2, 0, 60, 12, "Button", false)
+    ButtonElement4 := ButtonElement_create(60 * 3, 0, 60, 12, "Button", false)
+    ButtonElement5 := ButtonElement_create(60 * 4, 0, 60, 12, "Button", false)
+    ButtonElement6 := ButtonElement_create(60 * 5, 0, 60, 12, "Button", false)
+    home_page->addElement("btn7", ButtonElement1)
+    home_page->addElement("btn8", ButtonElement2)
+    home_page->addElement("btn9", ButtonElement3)
+    home_page->addElement("btn10", ButtonElement4)
+    home_page->addElement("btn11", ButtonElement5)
+    home_page->addElement("btn12", ButtonElement6)
+
+    Knob1 := KnobElement_create(0, 18, 60, 60, "Knob1", 0.0, 1.0, 0.5)
+    home_page->addElement("knob1", Knob1)
+
+    Meter1 := MeterElement_create(60 * 1, 18, 60, 60, -60.0, 0.0)
+    home_page->addElement("meter1", Meter1)
+
+
     mpcsb_display.router->switchPage("Home")
 
     cs.application_loop.frame_hook = proc(delta_time: f32, frame_count: int, user_data: rawptr) {

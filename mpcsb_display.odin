@@ -33,6 +33,7 @@ MPCSB_Display_create :: proc(control_surface: ^fe.ControlSurface) -> ^MPCSB_Disp
     display.backgound_color = cairo.BLACK
     display.cairo_surface = cairo.image_surface_create(display.cairo_format, display.width, display.height)
     display.cairo_context = cairo.create(display.cairo_surface)
+    cairo.SetupAntialiasing(display.cairo_context)
     display.sendLine = sendLine
     display.renderElement = renderElement
     display.isPixelOn = isPixelOn
@@ -76,11 +77,11 @@ renderElement :: proc(display: ^MPCSB_Display, element: ^MPCSB_Element) {
     for y :i32 = 0; y + yPos < y_end; y += 1 {
         line_byte_counter := 0
         final_x_val: i32 = 0
-        for x :i32 = 0; x + xPos < x_end + 1; x += 1 {
+        for x :i32 = 0; x + xPos < x_end; x += 1 {
             
             offset := (y + yPos ) * stride + ((x + xPos) * bytes_per_pixel)
            
-            if isPixelOn(data[offset + 3], data[offset + 2], data[offset + 1], data[offset + 0], 128) {
+            if isPixelOn(data[offset + 3], data[offset + 2], data[offset + 1], data[offset + 0], 1) {
                 display.line_bytes[x / MPC_BIT_STRIDE] |= MPC_SCREEN_BYTE_MAP[x % MPC_BIT_STRIDE]
             } else {
                 display.line_bytes[x / MPC_BIT_STRIDE] |= 0x00
@@ -109,7 +110,7 @@ renderElement :: proc(display: ^MPCSB_Display, element: ^MPCSB_Element) {
     element.changed = false
 }
 
-isPixelOn :: proc(a,r,g,b, threshold: u8,) -> bool {
+isPixelOn :: proc(a,r,g,b, threshold: u8) -> bool {
     return r > threshold || g > threshold || b > threshold
 }
 

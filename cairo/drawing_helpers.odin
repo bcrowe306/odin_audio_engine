@@ -57,7 +57,7 @@ draw_top_rounded_rectangle :: proc(cr: ^context_t, x, y, width, height, radius: 
         fill(cr);
     }
     else {
-        set_line_width (cr, 1.0);
+        set_line_width (cr, 1.5);
         stroke (cr);
     }
     
