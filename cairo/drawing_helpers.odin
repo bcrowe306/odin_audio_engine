@@ -90,6 +90,34 @@ draw_text_centered :: proc(cr: ^context_t, text: string, bounds: rectangle_t, fo
     show_text(cr, text_cstring)
 }
 
+draw_text_left :: proc(cr: ^context_t, text: string, bounds: rectangle_t, font_size: f64, color : Color) {
+    // draw text left aligned within the bounds
+    select_font_face(cr, FONT_FAMILY, font_slant_t.NORMAL, font_weight_t.NORMAL)
+    set_font_size(cr, font_size)
+    set_source_rgba(cr, color.r, color.g, color.b, color.a)
+    text_cstring: cstring = fmt.ctprint(text)
+    exts: text_extents_t
+    text_extents(cr, text_cstring, &exts)
+    x := bounds.x
+    y := bounds.y + (bounds.height - exts.height) / 2
+    move_to(cr, x, y + exts.height - (exts.y_bearing + exts.height))
+    show_text(cr, text_cstring)
+}
+
+draw_text_right :: proc(cr: ^context_t, text: string, bounds: rectangle_t, font_size: f64, color : Color) {
+    // draw text right aligned within the bounds
+    select_font_face(cr, FONT_FAMILY, font_slant_t.NORMAL, font_weight_t.NORMAL)
+    set_font_size(cr, font_size)
+    set_source_rgba(cr, color.r, color.g, color.b, color.a)
+    text_cstring: cstring = fmt.ctprint(text)
+    exts: text_extents_t
+    text_extents(cr, text_cstring, &exts)
+    x := bounds.x + bounds.width - exts.width
+    y := bounds.y + (bounds.height - exts.height) / 2
+    move_to(cr, x, y + exts.height - (exts.y_bearing + exts.height))
+    show_text(cr, text_cstring)
+}
+
 
 draw_rectangle :: proc(cr: ^context_t, x, y, width, height: f64, fill_rect: bool, color: Color, thickness: f64 = 1.0) {
     move_to(cr, x, y)

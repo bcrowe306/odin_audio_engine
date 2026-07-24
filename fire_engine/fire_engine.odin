@@ -59,6 +59,7 @@ FireEngine_Uninit :: proc(fe: ^FireEngine) {
 
     // Midi
     for _, control_surface in fe.midi_engine.control_surfaces {
+        control_surface->deactivate()
         control_surface->deInitialize()
     }
     fe.midi_engine->uninit()
@@ -67,7 +68,6 @@ FireEngine_Uninit :: proc(fe: ^FireEngine) {
     // Audio
     fe.audio_engine->uninit()
     free(fe.audio_engine)
-    
 
     // Resource manager
     fe.resource_manager->shutdown()

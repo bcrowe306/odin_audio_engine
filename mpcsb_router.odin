@@ -2,6 +2,7 @@ package main
 
 import fe "fire_engine"
 import cairo "cairo"
+import fmt "core:fmt"
 
 
 
@@ -29,6 +30,16 @@ MPCSB_Router_addPage :: proc(router: ^MPCSB_Router, name: string, page: ^MPCSB_P
 }
 
 MPCSB_Router_switchPage :: proc(router: ^MPCSB_Router, name: string) {
+
+    if router.pages[name] == nil {
+        fmt.println("Page not found: ", name)
+        if router.default_page != nil {
+            router.current_page = router.default_page
+            router.current_page->enter()
+        }
+        return
+    }
+
     if router.current_page != nil {
         router.current_page->exit()
     }

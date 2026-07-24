@@ -47,6 +47,7 @@ main :: proc() {
     // Tie the ui to the application and run the main loop
     app->setUI(ui) // Must set ui first before setting the main page
     ui.setMainPage(ui, main_page)
+    perc := fire_engine.resource_manager->acquireWave("perc2.wav", 44100, false)
     app.run(app)
     app_framework.App_Uninit(app)
 

@@ -11,8 +11,11 @@ MPCSB_Element :: struct {
     visible: bool,
     fg_color: cairo.Color,
     bg_color: cairo.Color,
+    focused: bool,
+    focusable: bool,
     setBounds: proc(element: ^MPCSB_Element, bounds: cairo.rectangle_t),
     setVisible: proc(element: ^MPCSB_Element, visible: bool),
+    setFocus: proc(element: ^MPCSB_Element, focused: bool),
     clear: proc(element: ^MPCSB_Element, cairo_context: ^cairo.context_t),
     data: rawptr,
     
@@ -27,6 +30,7 @@ MPCSB_Element_create :: proc( bounds: cairo.rectangle_t, visible: bool = true) -
     element.bg_color = cairo.BLACK
     element.setBounds = MPCSB_Element_setBounds
     element.setVisible = MPCSB_Element_setVisible
+    element.setFocus = MPCSB_Element_setFocus
     element.clear = MPCSB_Element_clear
     element.data = nil
     element.changed = true
@@ -51,6 +55,11 @@ MPCSB_Element_clear :: proc(element: ^MPCSB_Element, cairo_context: ^cairo.conte
     cairo.set_source_rgba(cairo_context, 0.0, 0.0, 0.0, 1.0) // Set color to black
     cairo.rectangle(cairo_context, element.bounds.x, element.bounds.y, element.bounds.width, element.bounds.height) // Define the rectangle area
     cairo.fill(cairo_context) // Fill the rectangle with the current color
+}
+
+MPCSB_Element_setFocus :: proc(element: ^MPCSB_Element, focused: bool) {
+    element.focused = focused
+    element.changed = true
 }
 
 
@@ -129,6 +138,24 @@ ButtonElement_create :: proc(x, y, width, height: f64, label: string, selected: 
         }
     }
     return element
+}
+
+ButtonElement_setSelected :: proc(element: ^MPCSB_Element, selected: bool) {
+    button_def := cast(^ButtonElementDef)element.data
+    if button_def.selected == selected {
+        return
+    }
+    button_def.selected = selected
+    element.changed = true
+}
+
+ButtonElement_setLabel :: proc(element: ^MPCSB_Element, label: string) {
+    button_def := cast(^ButtonElementDef)element.data
+    if button_def.label == label {
+        return
+    }
+    button_def.label = label
+    element.changed = true
 }
 
 
@@ -375,18 +402,27 @@ getLabelText :: proc(element: ^MeterElementDef) -> cstring {
 
 MeterElement_setLValue :: proc(element: ^MPCSB_Element, l_value: f64) {
     meter_def := cast(^MeterElementDef)element.data
+    if meter_def.l_value == l_value {
+        return
+    }
     meter_def.l_value = l_value
     element.changed = true
 }
 
 MeterElement_setRValue :: proc(element: ^MPCSB_Element, r_value: f64) {
     meter_def := cast(^MeterElementDef)element.data
+    if meter_def.r_value == r_value {
+        return
+    }
     meter_def.r_value = r_value
     element.changed = true
 }
 
 MeterElement_setMeters :: proc(element: ^MPCSB_Element, l_value: f64, r_value: f64) {
     meter_def := cast(^MeterElementDef)element.data
+    // if meter_def.l_value == l_value && meter_def.r_value == r_value {
+    //     return
+    // }
     meter_def.l_value = l_value
     meter_def.r_value = r_value
     element.changed = true

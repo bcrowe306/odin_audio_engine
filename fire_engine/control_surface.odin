@@ -198,6 +198,8 @@ activateControlSurface :: proc(control_surface: ^ControlSurface) {
 }
 
 deactivateControlSurface :: proc(control_surface: ^ControlSurface) {
+    control_surface.application_loop.running = false
+    thread.join(control_surface.application_loop.app_thread)
     for component_ptr in control_surface.components {
         component := cast(^Component)component_ptr
         component.deactivate(component)
@@ -205,8 +207,7 @@ deactivateControlSurface :: proc(control_surface: ^ControlSurface) {
     if control_surface.onDeactivate != nil {
         control_surface.onDeactivate(control_surface)
     }
-    control_surface.application_loop.running = false
-    thread.join(control_surface.application_loop.app_thread)
+    
 }
 
 

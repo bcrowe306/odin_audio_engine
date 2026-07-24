@@ -64,7 +64,7 @@ renderElement :: proc(display: ^MPCSB_Display, element: ^MPCSB_Element) {
     width := i32(element.bounds.width)
     height := i32(element.bounds.height)
 
-    fmt.printf("Bounds: x=%d, y=%d, width=%d, height=%d\n", xPos, yPos, width, height)
+    // fmt.printf("Bounds: x=%d, y=%d, width=%d, height=%d\n", xPos, yPos, width, height)
 
 
     format := cairo.image_surface_get_format(display.cairo_surface)
